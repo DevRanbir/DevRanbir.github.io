@@ -245,8 +245,8 @@
                 font-size: 8px;
             }
             .card{
-                width: 250px;
-                height: 320px;
+                width: 125px;
+                height: 175px;
             }    
         }
 
@@ -399,10 +399,10 @@
 
         // Scroll to the first or last card based on direction
         function moveTo(direction) {
-            offset = direction === 'left' ? 0 : -cardWidth * (cards.length - 3.5);
+            offset = direction === 'left' ? 1 : -cardWidth * (cards.length - 3.5);
             carouselInner.style.transform = `translateX(${offset}px)`;
             if (window.innerWidth <= 768) {
-                offset = direction === 'left' ? 0 : -cardWidth * (cards.length - 0);
+                offset = direction === 'left' ? 1 : -cardWidth * (cards.length - 0);
                 carouselInner.style.transform = `translateX(${offset}px)`;
             }
         }
