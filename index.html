@@ -245,8 +245,8 @@
                 font-size: 8px;
             }
             .card{
-                width: 280px;
-                height: 350px;
+                width: 250px;
+                height: 320px;
             }    
         }
 
@@ -401,7 +401,12 @@
         function moveTo(direction) {
             offset = direction === 'left' ? 0 : -cardWidth * (cards.length - 3.5);
             carouselInner.style.transform = `translateX(${offset}px)`;
+            if (window.innerWidth <= 768) {
+                offset = direction === 'left' ? 0 : -cardWidth * (cards.length - 0);
+                carouselInner.style.transform = `translateX(${offset}px)`;
+            }
         }
+
 
         // Mouse move to auto scroll left or right
         document.addEventListener('mousemove', (e) => {
