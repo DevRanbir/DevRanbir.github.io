@@ -326,14 +326,14 @@
         const goToButton = document.getElementById('goToButton');
         let offset = 0;
         const cardWidth = 230;
-    
+
         // Calculate total width based on card count and spacing
         const totalWidth = (cards.length * cardWidth) + (cards.length - 1) * 15;
         carouselInner.style.width = `${totalWidth}px`;
-    
+
         let selectedIndex = null; // Initialize selectedIndex to null
         let currentTranslate = 0; // Initialize currentTranslate
-    
+
         // Function to select a card based on index
         function selectCard(index) {
             if (cards[index].classList.contains('more-card')) {
@@ -341,9 +341,9 @@
                 selectedIndex = null; // Ensure no card is selected
                 return;
             }
-    
+
             selectedIndex = index; // Update selectedIndex
-    
+
             cards.forEach((card, i) => {
                 card.classList.toggle('selected', i === index);
                 if (i === index) {
@@ -352,15 +352,15 @@
                     goToButton.onclick = () => window.open(link, '_blank');
                 }
             });
-    
+
             offset = -index * cardWidth;
             currentTranslate = offset; // Update currentTranslate
             carouselInner.style.transform = `translateX(${offset}px)`;
         }
-    
+
         // Attach arrow key navigation for selection
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowRight' && selectedIndex < cards.length - 1) {
+            if (e.key === 'ArrowRight' && selectedIndex < cards.length - 2) {
                 selectedIndex = selectedIndex === null ? 0 : selectedIndex + 1; // Select the first card if no card is selected
                 selectCard(selectedIndex);
             } else if (e.key === 'ArrowLeft' && selectedIndex > 0) {
@@ -370,12 +370,12 @@
                 goToButton.click(); // Trigger "Go to Project" button
             }
         });
-    
+
         // Mouse click to select a card
         cards.forEach((card, index) => {
             card.addEventListener('click', () => selectCard(index));
         });
-    
+
         // Add background image to cards with data-image="true"
         cards.forEach(card => {
             if (card.getAttribute('data-image') === "true") {
@@ -388,62 +388,7 @@
                 }
             }
         });
-    
-        // Drag and scroll functionality
-        let isDragging = false, startX, scrollLeft;
-    
-        carouselInner.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            startX = e.pageX - carouselInner.offsetLeft;
-            scrollLeft = carouselInner.scrollLeft;
-        });
-    
-        carouselInner.addEventListener('mouseleave', () => { isDragging = false; });
-        carouselInner.addEventListener('mouseup', () => { isDragging = false; });
-    
-        carouselInner.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            e.preventDefault();
-            carouselInner.scrollLeft = scrollLeft - (e.pageX - carouselInner.offsetLeft - startX) * 2;
-        });
-    
-        // Touch events for mobile devices
-        carouselInner.addEventListener('touchstart', (e) => {
-            isDragging = true;
-            startX = e.touches[0].pageX - carouselInner.offsetLeft;
-            scrollLeft = carouselInner.scrollLeft;
-        });
-    
-        carouselInner.addEventListener('touchend', () => { isDragging = false; });
-    
-        carouselInner.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-    
-            const currentX = e.touches[0].clientX; // Get current touch position
-            const deltaX = currentX - startX; // Calculate the distance moved
-            carouselInner.style.transform = `translateX(${currentTranslate + deltaX}px)`; // Move the carousel as the user swipes
-        });
-    
-        carouselInner.addEventListener('touchend', (e) => {
-            isDragging = false;
-    
-            const endX = e.changedTouches[0].clientX; // Get the end touch position
-            const deltaX = endX - startX; // Calculate the swipe distance
-    
-            if (deltaX > 50 && selectedIndex > 0) {
-                // Swipe right (go to previous card)
-                selectedIndex--;
-                selectCard(selectedIndex);
-            } else if (deltaX < -50 && selectedIndex < cards.length - 1) {
-                // Swipe left (go to next card)
-                selectedIndex++;
-                selectCard(selectedIndex);
-            } else {
-                // Reset the position if the swipe was too small
-                carouselInner.style.transform = `translateX(${currentTranslate}px)`;
-            }
-        });
-    
+
         // Hide the go-to button when clicking outside any card
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.card')) {
@@ -451,7 +396,13 @@
                 goToButton.style.display = 'none';
             }
         });
-    
+
+        // Scroll to the first or last card based on direction
+        function moveTo(direction) {
+            offset = direction === 'left' ? 0 : -cardWidth * (cards.length - 3.5);
+            carouselInner.style.transform = `translateX(${offset}px)`;
+        }
+
         // Mouse move to auto scroll left or right
         document.addEventListener('mousemove', (e) => {
             const screenWidth = window.innerWidth;
@@ -459,48 +410,7 @@
             if (mouseX < screenWidth * 0.2) moveTo('left');
             else if (mouseX > screenWidth * 0.8) moveTo('right');
         });
-    
-        // Scroll to the first or last card based on direction
-        function moveTo(direction) {
-            offset = direction === 'left' ? 0 : -cardWidth * (cards.length - 1);
-            carouselInner.style.transform = `translateX(${offset}px)`;
-        }
-    
-        // --- Swipe / Touch Functionality ---
-        let isSwiping = false; // Initialize isSwiping
-    
-        carouselInner.addEventListener('touchstart', (e) => {
-            isSwiping = true;
-            startX = e.touches[0].clientX; // Get the initial touch position
-        });
-    
-        carouselInner.addEventListener('touchmove', (e) => {
-            if (!isSwiping) return;
-    
-            const currentX = e.touches[0].clientX; // Get current touch position
-            const deltaX = currentX - startX; // Calculate the distance moved
-            carouselInner.style.transform = `translateX(${currentTranslate + deltaX}px)`; // Move the carousel as the user swipes
-        });
-    
-        carouselInner.addEventListener('touchend', (e) => {
-            isSwiping = false;
-    
-            const endX = e.changedTouches[0].clientX; // Get the end touch position
-            const deltaX = endX - startX; // Calculate the swipe distance
-    
-            if (deltaX > 50 && selectedIndex > 0) {
-                // Swipe right (go to previous card)
-                selectedIndex--;
-                selectCard(selectedIndex);
-            } else if (deltaX < -50 && selectedIndex < cards.length - 1) {
-                // Swipe left (go to next card)
-                selectedIndex++;
-                selectCard(selectedIndex);
-            } else {
-                // Reset the position if the swipe was too small
-                carouselInner.style.transform = `translateX(${currentTranslate}px)`;
-            }
-        });
+
     </script>
     
 </body>
