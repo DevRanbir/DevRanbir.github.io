@@ -437,6 +437,39 @@
             offset = direction === 'left' ? 0 : -cardWidth * (cards.length - 1);
             carouselInner.style.transform = `translateX(${offset}px)`;
         }
+        // --- Swipe / Touch Functionality ---
+        carouselInner.addEventListener('touchstart', (e) => {
+            isSwiping = true;
+            startX = e.touches[0].clientX; // Get the initial touch position
+        });
+
+        carouselInner.addEventListener('touchmove', (e) => {
+            if (!isSwiping) return;
+
+            const currentX = e.touches[0].clientX; // Get current touch position
+            const deltaX = currentX - startX; // Calculate the distance moved
+            carouselInner.style.transform = `translateX(${currentTranslate + deltaX}px)`; // Move the carousel as the user swipes
+        });
+
+        carouselInner.addEventListener('touchend', (e) => {
+            isSwiping = false;
+
+            const endX = e.changedTouches[0].clientX; // Get the end touch position
+            const deltaX = endX - startX; // Calculate the swipe distance
+
+            if (deltaX > 50 && selectedIndex > 0) {
+                // Swipe right (go to previous card)
+                selectedIndex--;
+                selectCard(selectedIndex);
+            } else if (deltaX < -50 && selectedIndex < cards.length - 1) {
+                // Swipe left (go to next card)
+                selectedIndex++;
+                selectCard(selectedIndex);
+            } else {
+                // Reset the position if the swipe was too small
+                carouselInner.style.transform = `translateX(${currentTranslate}px)`;
+            }
+        });
     </script>
 </body>
 </html>
