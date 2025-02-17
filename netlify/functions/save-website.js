@@ -1,11 +1,26 @@
 const { Octokit } = require('@octokit/rest');
 
-exports.handler = async function(event) {
+exports.handler = async function(event, context) {
+  // Handle preflight requests
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+      }
+    };
+  }
+
   // Only allow POST requests
   if (event.httpMethod !== 'POST') {
-    return { 
-      statusCode: 405, 
-      body: 'Method Not Allowed' 
+    return {
+      statusCode: 405,
+      headers: {
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: 'Method Not Allowed'
     };
   }
 
@@ -43,8 +58,8 @@ exports.handler = async function(event) {
     return {
       statusCode: 200,
       headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ message: 'Website saved successfully' })
     };
@@ -53,8 +68,8 @@ exports.handler = async function(event) {
     return {
       statusCode: 500,
       headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ error: error.message })
     };
