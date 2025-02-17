@@ -1,21 +1,25 @@
-// netlify/functions/save-website.js
 const { Octokit } = require('@octokit/rest');
-const octokit = new Octokit({
-  auth: process.env.GITHUB_TOKEN
-});
 
 exports.handler = async function(event) {
+  // Only allow POST requests
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+    return { 
+      statusCode: 405, 
+      body: 'Method Not Allowed' 
+    };
   }
+
+  const octokit = new Octokit({
+    auth: process.env.GITHUB_TOKEN
+  });
 
   try {
     const websiteData = JSON.parse(event.body);
     
     // Get current file content
     const { data: fileData } = await octokit.repos.getContent({
-      owner: 'YOUR_GITHUB_USERNAME',
-      repo: 'YOUR_REPO_NAME',
+      owner: process.env.GITHUB_USERNAME,
+      repo: process.env.GITHUB_REPO,
       path: 'data/websites.json'
     });
 
@@ -28,8 +32,8 @@ exports.handler = async function(event) {
     
     // Update file in repository
     await octokit.repos.createOrUpdateFileContents({
-      owner: 'YOUR_GITHUB_USERNAME',
-      repo: 'YOUR_REPO_NAME',
+      owner: process.env.GITHUB_USERNAME,
+      repo: process.env.GITHUB_REPO,
       path: 'data/websites.json',
       message: `Add website: ${websiteData.title}`,
       content: Buffer.from(JSON.stringify(websites, null, 2)).toString('base64'),
@@ -38,11 +42,20 @@ exports.handler = async function(event) {
 
     return {
       statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
       body: JSON.stringify({ message: 'Website saved successfully' })
     };
   } catch (error) {
+    console.error('Error:', error);
     return {
       statusCode: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
       body: JSON.stringify({ error: error.message })
     };
   }
