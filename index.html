@@ -2405,89 +2405,62 @@
          * @returns {Promise<void>} - Resolves when cards are successfully imported
          */
 
-         // Cache for available files to reduce unnecessary fetches
-        let fileCache = null;
-        const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-        let lastCacheUpdate = 0;
-
-        async function updateCatalog() {
-        const now = Date.now();
-        
-        // Return cached results if still valid
-        if (fileCache && (now - lastCacheUpdate < CACHE_DURATION)) {
-            return fileCache;
-        }
-
-        try {
-            // Fetch catalog first as it's faster than directory listing
+         async function getAvailableImportSources() {
+          try {
+            // Direct fetch of catalog.json
             const catalogResponse = await fetch('data/catalog.json');
-            const currentCatalog = await catalogResponse.json();
-
-            // Get directory listing for verification
-            const response = await fetch('data/');
-            const dirListing = await response.text();
+            const fileNames = await catalogResponse.json();
             
-            const jsonFiles = [...dirListing.matchAll(/href="([^"]+\.json)"/g)]
-            .map(match => match[1].replace('.json', ''))
-            .filter(file => file !== 'catalog');
-
-            // Update cache
-            fileCache = jsonFiles;
-            lastCacheUpdate = now;
-            
-            return jsonFiles;
-        } catch (error) {
-            // Use cached data if available, otherwise empty array
-            return fileCache || [];
+            // Map to source objects with clean names
+            return fileNames.map(fileName => ({
+              name: fileName.charAt(0).toUpperCase() + fileName.slice(1).replace(/-/g, ' '),
+              path: `data/${fileName}.json`
+            }));
+          } catch (error) {
+            // Return default websites.json if catalog fails
+            return [{
+              name: 'Default Websites',
+              path: 'data/websites.json'
+            }];
+          }
         }
-        }
-
-        async function getAvailableImportSources() {
-        const fileNames = await updateCatalog();
-        return fileNames.map(fileName => ({
-            name: fileName.charAt(0).toUpperCase() + fileName.slice(1).replace(/-/g, ' '),
-            path: `data/${fileName}.json`
-        }));
-        }
-
-        async function handleImportSelection() {
-        const importSources = await getAvailableImportSources();
         
-        if (!importSources.length) {
-            showToast("No import sources available", "error");
-        }
-
-        const modal = document.createElement('div');
-        modal.className = 'import-modal';
-        modal.innerHTML = `
+        async function handleImportSelection() {
+          const importSources = await getAvailableImportSources();
+          
+          const modal = document.createElement('div');
+          modal.className = 'import-modal';
+          modal.innerHTML = `
             <div class="import-modal-content">
-            <h3>Available Import Sources (${importSources.length})</h3>
-            <div class="import-options">
+              <h3>Available Import Sources</h3>
+              <div class="import-options">
                 ${importSources.map(source => `
-                <button class="import-option" data-path="${source.path}">
+                  <button class="import-option" data-path="${source.path}">
                     ${source.name}
-                </button>
+                  </button>
                 `).join('')}
-            </div>
-            <div class="import-actions">
+              </div>
+              <div class="import-actions">
                 <button class="cancel-import">Cancel</button>
+              </div>
             </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-
-        // Use event delegation for better performance
-        modal.addEventListener('click', async (event) => {
-            const button = event.target;
-            if (button.classList.contains('import-option')) {
-            modal.remove();
-            await importCardsFromFile(button.dataset.path);
-            } else if (button.classList.contains('cancel-import')) {
-            modal.remove();
-            }
-        });
+          `;
+        
+          document.body.appendChild(modal);
+          modal.addEventListener('click', handleSelection);
         }
+        
+        const handleSelection = async (event) => {
+          const button = event.target;
+          if(button.classList.contains('import-option')) {
+            const selectedPath = button.dataset.path;
+            modal.remove();
+            await importCardsFromFile(selectedPath);
+          } else if(button.classList.contains('cancel-import')) {
+            modal.remove();
+          }
+        };
+        
 
         async function importCardsFromFile(filePath) {
         try {
