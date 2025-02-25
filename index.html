@@ -2404,110 +2404,128 @@
          * Automatically imports cards from data/websites.json
          * @returns {Promise<void>} - Resolves when cards are successfully imported
          */
-         // Add this function to handle multiple JSON file imports
-         // Function to fetch available JSON files from data directory
-         async function getAvailableImportSources() {
-            // Try directory listing first (works in local dev)
-            try {
-              const response = await fetch('data/');
-              const dirListing = await response.text();
-              const jsonFiles = dirListing.match(/href="([^"]+\.json)"/g) || [];
-              
-              return jsonFiles.map(file => {
-                const fileName = file.match(/([^\/]+)\.json/)[1];
-                return {
-                  name: fileName.charAt(0).toUpperCase() + fileName.slice(1),
-                  path: `data/${fileName}.json`
-                };
-              });
-            } catch (error) {
-              // Fallback to scanning the data directory
-              const files = await fetch('data/')
-                .then(response => response.json())
-                .then(files => files.filter(file => file.endsWith('.json')))
-                .catch(() => []);
-          
-              return files.map(file => ({
-                name: file.replace('.json', '').charAt(0).toUpperCase() + file.slice(1),
-                path: `data/${file}`
-              }));
-            }
-          }
-          
-          async function handleImportSelection() {
-            const importSources = await getAvailableImportSources();
+
+         // Cache for available files to reduce unnecessary fetches
+        let fileCache = null;
+        const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+        let lastCacheUpdate = 0;
+
+        async function updateCatalog() {
+        const now = Date.now();
+        
+        // Return cached results if still valid
+        if (fileCache && (now - lastCacheUpdate < CACHE_DURATION)) {
+            return fileCache;
+        }
+
+        try {
+            // Fetch catalog first as it's faster than directory listing
+            const catalogResponse = await fetch('data/catalog.json');
+            const currentCatalog = await catalogResponse.json();
+
+            // Get directory listing for verification
+            const response = await fetch('data/');
+            const dirListing = await response.text();
             
-            const modal = document.createElement('div');
-            modal.className = 'import-modal';
-            modal.innerHTML = `
-              <div class="import-modal-content">
-                <h3>Available Import Sources</h3>
-                <div class="import-options">
-                  ${importSources.map(source => `
-                    <button class="import-option" data-path="${source.path}">
-                      ${source.name}
-                    </button>
-                  `).join('')}
-                </div>
-                <div class="import-actions">
-                  <button class="cancel-import">Cancel</button>
-                </div>
-              </div>
-            `;
-          
-            document.body.appendChild(modal);
-          
-            const handleSelection = async (event) => {
-              const button = event.target;
-              if(button.classList.contains('import-option')) {
-                const selectedPath = button.dataset.path;
-                modal.remove();
-                await importCardsFromFile(selectedPath);
-              } else if(button.classList.contains('cancel-import')) {
-                modal.remove();
-              }
-            };
-          
-            modal.addEventListener('click', handleSelection);
-          }
-  
-  // Modified import function to accept file path
-  async function importCardsFromFile(filePath) {
-    try {
-      showToast(`Loading cards from ${filePath}...`);
-  
-      const response = await fetch(filePath);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch ${filePath}`);
-      }
-  
-      const data = await response.json();
-      
-      if (!Array.isArray(data)) {
-        throw new Error("Invalid data format: expected an array");
-      }
-  
-      const newCards = data.map(item => ({
-        id: Date.now() + Math.floor(Math.random() * 1000),
-        title: item.title || "Untitled",
-        tags: item.tags || [],
-        description: item.description || "",
-        imageUrl: item.imageUrl || "",
-        link: item.link || "#",
-        status: item.status || "active", 
-        createdAt: new Date().toISOString()
-      }));
-  
-      cards = [...newCards, ...cards];
-      saveCards();
-      renderCards();
-  
-      showToast(`Successfully imported ${newCards.length} cards!`);
-    } catch (error) {
-      console.error("Error importing cards:", error);
-      showToast(`Import failed: ${error.message}`, "error");
-    }
-  }
+            const jsonFiles = [...dirListing.matchAll(/href="([^"]+\.json)"/g)]
+            .map(match => match[1].replace('.json', ''))
+            .filter(file => file !== 'catalog');
+
+            // Update cache
+            fileCache = jsonFiles;
+            lastCacheUpdate = now;
+            
+            return jsonFiles;
+        } catch (error) {
+            // Use cached data if available, otherwise empty array
+            return fileCache || [];
+        }
+        }
+
+        async function getAvailableImportSources() {
+        const fileNames = await updateCatalog();
+        return fileNames.map(fileName => ({
+            name: fileName.charAt(0).toUpperCase() + fileName.slice(1).replace(/-/g, ' '),
+            path: `data/${fileName}.json`
+        }));
+        }
+
+        async function handleImportSelection() {
+        const importSources = await getAvailableImportSources();
+        
+        if (!importSources.length) {
+            showToast("No import sources available", "error");
+            return;
+        }
+
+        const modal = document.createElement('div');
+        modal.className = 'import-modal';
+        modal.innerHTML = `
+            <div class="import-modal-content">
+            <h3>Available Import Sources (${importSources.length})</h3>
+            <div class="import-options">
+                ${importSources.map(source => `
+                <button class="import-option" data-path="${source.path}">
+                    ${source.name}
+                </button>
+                `).join('')}
+            </div>
+            <div class="import-actions">
+                <button class="cancel-import">Cancel</button>
+            </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Use event delegation for better performance
+        modal.addEventListener('click', async (event) => {
+            const button = event.target;
+            if (button.classList.contains('import-option')) {
+            modal.remove();
+            await importCardsFromFile(button.dataset.path);
+            } else if (button.classList.contains('cancel-import')) {
+            modal.remove();
+            }
+        });
+        }
+
+        async function importCardsFromFile(filePath) {
+        try {
+            showToast(`Loading cards from ${filePath}...`);
+
+            const [response, existingCards] = await Promise.all([
+            fetch(filePath),
+            Promise.resolve(cards) // Assuming cards is global
+            ]);
+
+            if (!response.ok) throw new Error(`Failed to fetch ${filePath}`);
+
+            const data = await response.json();
+            if (!Array.isArray(data)) throw new Error("Invalid data format: expected an array");
+
+            const newCards = data.map(item => ({
+            id: Date.now() + Math.floor(Math.random() * 1000),
+            title: item.title || "Untitled",
+            tags: item.tags || [],
+            description: item.description || "",
+            imageUrl: item.imageUrl || "",
+            link: item.link || "#",
+            status: item.status || "active",
+            createdAt: new Date().toISOString()
+            }));
+
+            cards = [...newCards, ...existingCards];
+            saveCards();
+            renderCards();
+
+            showToast(`Successfully imported ${newCards.length} cards!`);
+        } catch (error) {
+            console.error("Error importing cards:", error);
+            showToast(`Import failed: ${error.message}`, "error");
+        }
+        }
+
   
 
   
