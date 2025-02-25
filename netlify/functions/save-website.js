@@ -29,50 +29,87 @@ exports.handler = async function(event, context) {
   });
 
   try {
-    const websiteData = JSON.parse(event.body);
-    const category = websiteData.category || 'websites'; // Default to 'websites' if no category
+    const data = JSON.parse(event.body);
+    const { websiteData, category } = data;
     
-    // Determine file path based on category
-    const filePath = `data/${category}.json`;
+    // Default to websites.json if no category provided
+    const fileName = category ? `${category}.json` : 'websites.json';
+    const catalogPath = 'data/catalog.json';
+    
+    // First, get or create the catalog
+    let catalog = [];
+    try {
+      const { data: catalogData } = await octokit.repos.getContent({
+        owner: process.env.GITHUB_USERNAME,
+        repo: process.env.GITHUB_REPO,
+        path: catalogPath
+      });
+      
+      const catalogContent = Buffer.from(catalogData.content, 'base64').toString();
+      catalog = JSON.parse(catalogContent);
+    } catch (error) {
+      // If catalog doesn't exist, we'll create it
+      console.log('Catalog does not exist, will create it');
+    }
+    
+    // Add category to catalog if it doesn't exist
+    if (category && !catalog.includes(category)) {
+      catalog.push(category);
+    }
+    
+    // Update catalog file
+    let catalogSha = null;
+    try {
+      const { data: existingCatalog } = await octokit.repos.getContent({
+        owner: process.env.GITHUB_USERNAME,
+        repo: process.env.GITHUB_REPO,
+        path: catalogPath
+      });
+      catalogSha = existingCatalog.sha;
+    } catch (error) {
+      // If file doesn't exist, no SHA needed
+    }
+    
+    await octokit.repos.createOrUpdateFileContents({
+      owner: process.env.GITHUB_USERNAME,
+      repo: process.env.GITHUB_REPO,
+      path: catalogPath,
+      message: 'Update catalog',
+      content: Buffer.from(JSON.stringify(catalog, null, 2)).toString('base64'),
+      sha: catalogSha
+    });
+    
+    // Now handle the category file
+    let websites = [];
+    let fileSha = null;
     
     try {
-      // Get current file content
       const { data: fileData } = await octokit.repos.getContent({
         owner: process.env.GITHUB_USERNAME,
         repo: process.env.GITHUB_REPO,
-        path: filePath
+        path: `data/${fileName}`
       });
-
-      // Decode current content
+      
+      fileSha = fileData.sha;
       const currentContent = Buffer.from(fileData.content, 'base64').toString();
-      const websites = JSON.parse(currentContent);
-      
-      // Add new website
-      websites.push(websiteData);
-      
-      // Update file in repository
-      await octokit.repos.createOrUpdateFileContents({
-        owner: process.env.GITHUB_USERNAME,
-        repo: process.env.GITHUB_REPO,
-        path: filePath,
-        message: `Add website: ${websiteData.title} to ${category} collection`,
-        content: Buffer.from(JSON.stringify(websites, null, 2)).toString('base64'),
-        sha: fileData.sha
-      });
+      websites = JSON.parse(currentContent);
     } catch (error) {
-      // If file doesn't exist yet, create it
-      if (error.status === 404) {
-        await octokit.repos.createOrUpdateFileContents({
-          owner: process.env.GITHUB_USERNAME,
-          repo: process.env.GITHUB_REPO,
-          path: filePath,
-          message: `Create ${category} collection with first website: ${websiteData.title}`,
-          content: Buffer.from(JSON.stringify([websiteData], null, 2)).toString('base64')
-        });
-      } else {
-        throw error;
-      }
+      // If file doesn't exist yet, that's okay
+      console.log(`Category file ${fileName} does not exist, will create it`);
     }
+    
+    // Add new website
+    websites.push(websiteData);
+    
+    // Update category file
+    await octokit.repos.createOrUpdateFileContents({
+      owner: process.env.GITHUB_USERNAME,
+      repo: process.env.GITHUB_REPO,
+      path: `data/${fileName}`,
+      message: `Add website: ${websiteData.title} to ${fileName}`,
+      content: Buffer.from(JSON.stringify(websites, null, 2)).toString('base64'),
+      sha: fileSha
+    });
 
     return {
       statusCode: 200,
@@ -82,7 +119,7 @@ exports.handler = async function(event, context) {
       },
       body: JSON.stringify({ 
         message: 'Website saved successfully',
-        category: category 
+        category: category || 'general'
       })
     };
   } catch (error) {
