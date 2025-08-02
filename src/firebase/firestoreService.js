@@ -526,201 +526,373 @@ export const generateAnonymousUserId = () => {
   return `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
 
-// Send a message to chat
+// Generate message ID
+const generateMessageId = () => {
+  return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+};
+
+// Create or get chat document reference using a combination of userName and userId
+const getChatDocRef = (userName, userId) => {
+  // Use combination of userName and userId to ensure uniqueness
+  // This prevents users with same name from seeing each other's chats
+  const safeUserName = userName
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '_')
+    .replace(/_{2,}/g, '_') // Replace multiple underscores with single
+    .replace(/^_|_$/g, ''); // Remove leading/trailing underscores
+  
+  // Extract timestamp from userId for uniqueness
+  const userIdSuffix = userId.split('_')[1] || Date.now();
+  const safeDocId = `${safeUserName}_${userIdSuffix}`;
+  
+  console.log('🔑 Document ID for userName:', userName, 'userId:', userId, '→', safeDocId);
+  return doc(db, CHAT_COLLECTION, safeDocId);
+};
+
+// Send a message to chat (creates or updates user's chat document)
 export const sendChatMessage = async (message, userId, userName = null) => {
   try {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + (2 * 60 * 60 * 1000)); // 2 hours from now
     
-    const chatMessage = {
+    if (!userName) {
+      throw new Error('Username is required for chat messages');
+    }
+    
+    // Get chat document reference using both userName and userId for uniqueness
+    const chatDocRef = getChatDocRef(userName, userId);
+    const chatDoc = await getDoc(chatDocRef);
+    
+    const messageId = generateMessageId();
+    const newMessage = {
+      sender: 'user',
       message: message.trim(),
-      userId: userId,
-      userName: userName || `Anonymous User`,
-      timestamp: serverTimestamp(),
-      createdAt: now.toISOString(),
-      expiresAt: expiresAt, // TTL field for automatic deletion
-      isFromTelegram: false,
-      messageType: 'user'
+      timestamp: now,
+      expiresAt: expiresAt
     };
-
-    const docRef = await addDoc(collection(db, CHAT_COLLECTION), chatMessage);
-    console.log('Message sent successfully with ID:', docRef.id);
     
-    // Trigger Telegram bot webhook (if configured)
-    await notifyTelegramBot(chatMessage, docRef.id);
+    if (chatDoc.exists()) {
+      // Update existing chat document
+      const chatData = chatDoc.data();
+      
+      console.log('📝 Adding message to existing chat document for:', userName);
+      console.log('🔍 Current messages count:', Object.keys(chatData.messages || {}).length);
+      
+      // Add new message to the messages map
+      await updateDoc(chatDocRef, {
+        [`messages.${messageId}`]: newMessage,
+        lastUpdated: now
+      });
+      
+      console.log('✅ Message added to existing chat for user:', userName, 'message ID:', messageId);
+    } else {
+      // Create new chat document with the structure from your image
+      console.log('📄 Creating new chat document for:', userName);
+      
+      const newChatData = {
+        userName: userName,
+        userId: userId,
+        supportAgentName: 'Support Team',
+        createdAt: now,
+        lastUpdated: now,
+        messages: {
+          [messageId]: newMessage
+        }
+      };
+      
+      await setDoc(chatDocRef, newChatData);
+      console.log('✅ New chat document created for user:', userName, 'message ID:', messageId);
+    }
     
-    return docRef.id;
+    return { 
+      success: true, 
+      messageId, 
+      userName,
+      chatDocId: chatDocRef.id 
+    };
   } catch (error) {
     console.error('Error sending message:', error);
     throw error;
   }
 };
 
-// Send response from Telegram bot
-export const sendTelegramResponse = async (message, userId, originalMessageId = null) => {
+// Send response from support (adds to existing chat document)
+export const sendSupportResponse = async (message, userName, userId = null) => {
   try {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + (2 * 60 * 60 * 1000)); // 2 hours from now
     
-    const chatMessage = {
+    if (!userName) {
+      throw new Error('Username is required for support responses');
+    }
+    
+    if (!userId) {
+      throw new Error('User ID is required for support responses');
+    }
+    
+    // Get chat document reference using both userName and userId
+    const chatDocRef = getChatDocRef(userName, userId);
+    const chatDoc = await getDoc(chatDocRef);
+    
+    if (!chatDoc.exists()) {
+      throw new Error('Chat document not found for user: ' + userName + ' with ID: ' + userId);
+    }
+    
+    const messageId = generateMessageId();
+    const newMessage = {
+      sender: 'support',
       message: message.trim(),
-      userId: userId,
-      userName: 'Support Team',
-      timestamp: serverTimestamp(),
-      createdAt: now.toISOString(),
-      expiresAt: expiresAt, // TTL field for automatic deletion
-      isFromTelegram: true,
-      messageType: 'support',
-      originalMessageId: originalMessageId
+      timestamp: now,
+      expiresAt: expiresAt
     };
-
-    const docRef = await addDoc(collection(db, CHAT_COLLECTION), chatMessage);
-    console.log('Telegram response sent successfully with ID:', docRef.id, 'for user:', userId);
-    return docRef.id;
+    
+    // Add support message to the messages map
+    await updateDoc(chatDocRef, {
+      [`messages.${messageId}`]: newMessage,
+      lastUpdated: now
+    });
+    
+    console.log('Support response sent to chat for user:', userName, 'userId:', userId, 'message ID:', messageId);
+    return { 
+      success: true, 
+      messageId, 
+      userName,
+      userId,
+      chatDocId: chatDocRef.id 
+    };
   } catch (error) {
-    console.error('Error sending Telegram response:', error);
+    console.error('Error sending support response:', error);
     throw error;
   }
 };
 
-// Subscribe to chat messages for a user
+// Subscribe to chat messages for a user (document-based using userName and userId)
 export const subscribeToChatMessages = (userId, callback) => {
   try {
-    const q = query(
-      collection(db, CHAT_COLLECTION),
-      where('userId', '==', userId),
-      orderBy('timestamp', 'desc'),
-      limit(50)
-    );
+    // Get userName from localStorage since we need it for the document ID
+    const userName = localStorage.getItem('chatUserName');
+    
+    if (!userName) {
+      console.log('❌ No userName found in localStorage, returning empty messages');
+      callback([]);
+      return () => {}; // Return empty unsubscribe function
+    }
+    
+    if (!userId) {
+      console.log('❌ No userId provided, returning empty messages');
+      callback([]);
+      return () => {}; // Return empty unsubscribe function
+    }
+    
+    console.log('👂 Subscribing to chat messages for userName:', userName, 'userId:', userId);
+    const chatDocRef = getChatDocRef(userName, userId);
 
-    return onSnapshot(q, (querySnapshot) => {
-      const messages = [];
-      querySnapshot.forEach((doc) => {
-        const docData = doc.data();
-        messages.push({
-          id: doc.id,
-          ...docData
+    return onSnapshot(chatDocRef, (doc) => {
+      console.log('🔄 Firestore snapshot received for:', userName);
+      
+      if (doc.exists()) {
+        console.log('📄 Document exists, processing messages...');
+        const chatData = doc.data();
+        const messages = [];
+        
+        console.log('🔍 Raw chat data:', {
+          userName: chatData.userName,
+          userId: chatData.userId,
+          messagesCount: Object.keys(chatData.messages || {}).length
         });
-      });
-      
-      console.log(`📨 Found ${messages.length} messages for user ${userId}:`, messages);
-      
-      // Handle both Firebase timestamps and JavaScript Date objects
-      messages.sort((a, b) => {
-        // Handle both Firebase timestamps and JavaScript Date objects
-        let timeA, timeB;
         
-        if (a.timestamp?.toMillis) {
-          timeA = a.timestamp.toMillis();
-        } else if (a.timestamp?.getTime) {
-          timeA = a.timestamp.getTime();
-        } else {
-          timeA = new Date(a.createdAt).getTime();
+        // Convert messages map to array and sort by timestamp
+        if (chatData.messages) {
+          Object.entries(chatData.messages).forEach(([msgId, msgData]) => {
+            console.log('🔍 Processing message:', msgId, msgData);
+            
+            // Check if message has expired
+            const expiresAt = msgData.expiresAt?.toDate ? msgData.expiresAt.toDate() : new Date(msgData.expiresAt);
+            if (expiresAt > new Date()) {
+              // Handle timestamp conversion properly
+              let messageTimestamp;
+              if (msgData.timestamp?.toDate) {
+                messageTimestamp = msgData.timestamp.toDate();
+              } else if (msgData.timestamp) {
+                messageTimestamp = new Date(msgData.timestamp);
+              } else {
+                messageTimestamp = new Date();
+              }
+              
+              const processedMessage = {
+                id: msgId,
+                sender: msgData.sender,
+                message: msgData.message,
+                timestamp: messageTimestamp,
+                userName: msgData.sender === 'support' ? chatData.supportAgentName : chatData.userName,
+                userId: chatData.userId
+              };
+              
+              console.log('✅ Adding message to array:', processedMessage);
+              messages.push(processedMessage);
+            } else {
+              console.log('⏰ Message expired, skipping:', msgId);
+            }
+          });
+          
+          // Sort messages by timestamp (oldest first)
+          messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
         }
         
-        if (b.timestamp?.toMillis) {
-          timeB = b.timestamp.toMillis();
-        } else if (b.timestamp?.getTime) {
-          timeB = b.timestamp.getTime();
-        } else {
-          timeB = new Date(b.createdAt).getTime();
-        }
-        
-        return timeA - timeB;
-      });
-      
-      callback(messages);
+        console.log(`📨 Final messages array for ${userName} (${userId}):`, messages.length, 'messages');
+        callback(messages);
+      } else {
+        console.log(`❌ No chat document found for user: ${userName} with userId: ${userId}`);
+        callback([]);
+      }
+    }, (error) => {
+      console.error('❌ Error subscribing to chat messages:', error);
+      callback([]);
     });
   } catch (error) {
     console.error('Error subscribing to chat messages:', error);
-    throw error;
+    callback([]);
+    return () => {}; // Return empty unsubscribe function
   }
 };
 
-// Subscribe to all chat messages (for admin/bot)
-export const subscribeToAllChatMessages = (callback) => {
+// Subscribe to all chat documents (for admin/support)
+export const subscribeToAllChatThreads = (callback) => {
   try {
     const q = query(
       collection(db, CHAT_COLLECTION),
-      orderBy('timestamp', 'desc'),
+      orderBy('lastUpdated', 'desc'),
       limit(100)
     );
 
     return onSnapshot(q, (querySnapshot) => {
-      const messages = [];
+      const chats = [];
       querySnapshot.forEach((doc) => {
-        messages.push({
+        const chatData = doc.data();
+        const messages = [];
+        
+        // Convert messages map to array
+        if (chatData.messages) {
+          Object.entries(chatData.messages).forEach(([msgId, msgData]) => {
+            // Check if message has expired
+            const expiresAt = msgData.expiresAt?.toDate ? msgData.expiresAt.toDate() : new Date(msgData.expiresAt);
+            if (expiresAt > new Date()) {
+              messages.push({
+                id: msgId,
+                sender: msgData.sender,
+                message: msgData.message,
+                timestamp: msgData.timestamp?.toDate ? msgData.timestamp.toDate() : new Date(msgData.timestamp),
+                userName: msgData.sender === 'support' ? chatData.supportAgentName : chatData.userName
+              });
+            }
+          });
+          
+          // Sort messages by timestamp
+          messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        }
+        
+        chats.push({
           id: doc.id,
-          ...doc.data()
+          userName: chatData.userName,
+          userId: chatData.userId,
+          supportAgentName: chatData.supportAgentName,
+          createdAt: chatData.createdAt,
+          lastUpdated: chatData.lastUpdated,
+          messages: messages
         });
       });
       
-      callback(messages);
+      callback(chats);
     });
   } catch (error) {
-    console.error('Error subscribing to all chat messages:', error);
+    console.error('Error subscribing to all chat threads:', error);
     throw error;
   }
 };
 
-// Notify Telegram bot about new message
-const notifyTelegramBot = async (message, messageId) => {
+// Delete a user's chat document (for reset functionality)
+export const deleteChatThread = async (userName, userId = null) => {
   try {
-    // Import the Telegram service dynamically to avoid circular dependencies
-    const { notifyTelegramBot: telegramNotify } = await import('../services/telegramService');
+    if (!userName) {
+      console.log('No userName provided for deletion');
+      return { success: true, message: 'No userName provided' };
+    }
     
-    const messageData = {
-      ...message,
-      messageId: messageId
-    };
+    if (!userId) {
+      console.log('No userId provided for deletion');
+      return { success: true, message: 'No userId provided' };
+    }
     
-    await telegramNotify(messageData);
+    const chatDocRef = getChatDocRef(userName, userId);
     
+    console.log('🗑️ Deleting chat document for user:', userName, 'userId:', userId);
+    
+    // Check if document exists before deleting
+    const chatDoc = await getDoc(chatDocRef);
+    if (chatDoc.exists()) {
+      await deleteDoc(chatDocRef);
+      console.log('✅ Chat document deleted successfully');
+      return { success: true, userName, userId, chatDocId: chatDocRef.id };
+    } else {
+      console.log('ℹ️ No chat document found to delete for user:', userName, 'userId:', userId);
+      return { success: true, userName, userId, message: 'No chat document found' };
+    }
   } catch (error) {
-    console.error('Error notifying Telegram bot:', error);
-    // Don't throw error as this shouldn't block the main chat functionality
+    console.error('❌ Error deleting chat document:', error);
+    throw error;
   }
 };
 
 /**
- * Comprehensive test function to verify the complete message flow
- * Call this function from the browser console to test the chat system
+ * Test function to verify the chat system with new structure
  */
-export const testCompleteMessageFlow = async (testUserId = 'test-user-flow') => {
+export const testChatFlow = async (testUserId = 'test-user-flow') => {
   try {
-    console.log('🧪 Starting complete message flow test...');
+    console.log('🧪 Starting chat flow test with new structure...');
     
-    // Step 1: Send a user message (simulate website message)
+    const testUserName = 'Test_User';
+    
+    // Step 1: Send a user message
     console.log('📤 Step 1: Sending user message...');
-    const userMessageId = await sendChatMessage(
+    const userResult = await sendChatMessage(
       'This is a test message from the website', 
       testUserId, 
-      'Test User'
+      testUserName
     );
-    console.log('✅ User message sent with ID:', userMessageId);
+    console.log('✅ User message sent:', userResult);
     
-    // Step 2: Simulate Telegram response (what should happen when admin replies)
-    console.log('📤 Step 2: Sending test Telegram response...');
-    const telegramResponseId = await sendTelegramResponse(
-      'This is a test response from Telegram support',
-      testUserId,
-      userMessageId
+    // Step 2: Send a support response
+    console.log('📤 Step 2: Sending support response...');
+    const supportResult = await sendSupportResponse(
+      'This is a test response from support',
+      testUserName,
+      testUserId
     );
-    console.log('✅ Telegram response sent with ID:', telegramResponseId);
+    console.log('✅ Support response sent:', supportResult);
     
     // Step 3: Subscribe to messages and verify both appear
     console.log('👂 Step 3: Listening for messages...');
+    
+    // Temporarily store userName in localStorage for the test
+    const originalUserName = localStorage.getItem('chatUserName');
+    localStorage.setItem('chatUserName', testUserName);
+    
     const unsubscribe = subscribeToChatMessages(testUserId, (messages) => {
-      console.log(`📨 Received ${messages.length} messages for user ${testUserId}:`);
+      console.log(`📨 Received ${messages.length} messages for user ${testUserName}:`);
       messages.forEach((msg, index) => {
-        console.log(`  ${index + 1}. [${msg.messageType}] ${msg.userName}: ${msg.message}`);
+        console.log(`  ${index + 1}. [${msg.sender}] ${msg.message}`);
         console.log(`     - ID: ${msg.id}`);
-        console.log(`     - From Telegram: ${msg.isFromTelegram || false}`);
-        console.log(`     - Timestamp: ${msg.timestamp || msg.createdAt}`);
+        console.log(`     - Timestamp: ${msg.timestamp}`);
       });
       
       if (messages.length >= 2) {
         console.log('✅ Both messages found! Flow test successful.');
+        // Restore original userName
+        if (originalUserName) {
+          localStorage.setItem('chatUserName', originalUserName);
+        } else {
+          localStorage.removeItem('chatUserName');
+        }
         unsubscribe(); // Stop listening after verification
       }
     });
@@ -728,18 +900,25 @@ export const testCompleteMessageFlow = async (testUserId = 'test-user-flow') => 
     // Stop test after 10 seconds if not completed
     setTimeout(() => {
       unsubscribe();
+      // Restore original userName
+      if (originalUserName) {
+        localStorage.setItem('chatUserName', originalUserName);
+      } else {
+        localStorage.removeItem('chatUserName');
+      }
       console.log('⏰ Test timeout reached');
     }, 10000);
     
     return {
       success: true,
       testUserId,
-      userMessageId,
-      telegramResponseId
+      testUserName,
+      userResult,
+      supportResult
     };
     
   } catch (error) {
-    console.error('❌ Message flow test failed:', error);
+    console.error('❌ Chat flow test failed:', error);
     return {
       success: false,
       error: error.message
@@ -753,39 +932,73 @@ export const testCompleteMessageFlow = async (testUserId = 'test-user-flow') => 
  */
 export const cleanupExpiredMessages = async () => {
   try {
-    const now = new Date();
-    console.log('🧹 Starting cleanup of expired messages...');
+    console.log('🧹 Starting cleanup of expired chat messages...');
     
-    // Query for messages that have expired
+    const now = new Date();
+    const cutoffTime = new Date(now.getTime() - (2 * 60 * 60 * 1000)); // 2 hours ago
+    
     const q = query(
       collection(db, CHAT_COLLECTION),
-      where('expiresAt', '<=', now)
+      where('lastUpdated', '<', cutoffTime)
     );
     
     const querySnapshot = await getDocs(q);
-    const deletedMessages = [];
+    const processedChats = [];
+    let totalDeletedMessages = 0;
     
-    // Delete each expired message
+    // Process each chat document
     for (const docSnapshot of querySnapshot.docs) {
       try {
-        await deleteDoc(docSnapshot.ref);
-        deletedMessages.push({
-          id: docSnapshot.id,
-          userId: docSnapshot.data().userId,
-          message: docSnapshot.data().message.substring(0, 50) + '...'
+        const chatData = docSnapshot.data();
+        const messages = chatData.messages || {};
+        let deletedMessagesCount = 0;
+        let updatedMessages = {};
+        
+        // Check each message for expiration
+        Object.entries(messages).forEach(([msgId, msgData]) => {
+          const expiresAt = msgData.expiresAt?.toDate ? msgData.expiresAt.toDate() : new Date(msgData.expiresAt);
+          if (expiresAt > now) {
+            // Keep non-expired messages
+            updatedMessages[msgId] = msgData;
+          } else {
+            // Count expired messages for deletion
+            deletedMessagesCount++;
+          }
         });
-        console.log(`🗑️ Deleted expired message: ${docSnapshot.id}`);
+        
+        if (deletedMessagesCount > 0) {
+          if (Object.keys(updatedMessages).length === 0) {
+            // Delete entire document if no messages remain
+            await deleteDoc(docSnapshot.ref);
+            console.log(`🗑️ Deleted entire chat document: ${docSnapshot.id} (${deletedMessagesCount} expired messages)`);
+          } else {
+            // Update document with remaining messages
+            await updateDoc(docSnapshot.ref, {
+              messages: updatedMessages,
+              lastUpdated: now
+            });
+            console.log(`🧹 Cleaned ${deletedMessagesCount} expired messages from chat: ${docSnapshot.id}`);
+          }
+          
+          totalDeletedMessages += deletedMessagesCount;
+          processedChats.push({
+            id: docSnapshot.id,
+            userName: chatData.userName,
+            deletedMessages: deletedMessagesCount,
+            remainingMessages: Object.keys(updatedMessages).length
+          });
+        }
       } catch (deleteError) {
-        console.error(`❌ Error deleting message ${docSnapshot.id}:`, deleteError);
+        console.error(`❌ Error processing chat ${docSnapshot.id}:`, deleteError);
       }
     }
     
-    console.log(`✅ Cleanup completed. Deleted ${deletedMessages.length} expired messages.`);
+    console.log(`✅ Cleanup completed. Processed ${processedChats.length} chats, deleted ${totalDeletedMessages} expired messages.`);
     
     return {
       success: true,
-      deletedCount: deletedMessages.length,
-      deletedMessages: deletedMessages
+      deletedCount: totalDeletedMessages,
+      processedChats: processedChats
     };
     
   } catch (error) {
@@ -837,32 +1050,67 @@ export const manualCleanup = async (hoursOld = 2) => {
     
     const q = query(
       collection(db, CHAT_COLLECTION),
-      where('timestamp', '<', cutoffTime)
+      where('lastUpdated', '<', cutoffTime)
     );
     
     const querySnapshot = await getDocs(q);
-    const deletedMessages = [];
+    const processedChats = [];
+    let totalDeletedMessages = 0;
     
     for (const docSnapshot of querySnapshot.docs) {
       try {
-        await deleteDoc(docSnapshot.ref);
-        deletedMessages.push({
-          id: docSnapshot.id,
-          userId: docSnapshot.data().userId,
-          createdAt: docSnapshot.data().createdAt
+        const chatData = docSnapshot.data();
+        const messages = chatData.messages || {};
+        let deletedMessagesCount = 0;
+        let updatedMessages = {};
+        
+        // Check each message against cutoff time
+        Object.entries(messages).forEach(([msgId, msgData]) => {
+          const messageTime = msgData.timestamp?.toDate ? msgData.timestamp.toDate() : new Date(msgData.timestamp);
+          if (messageTime > cutoffTime) {
+            // Keep newer messages
+            updatedMessages[msgId] = msgData;
+          } else {
+            // Count older messages for deletion
+            deletedMessagesCount++;
+          }
         });
-        console.log(`🗑️ Deleted old message: ${docSnapshot.id}`);
+        
+        if (deletedMessagesCount > 0) {
+          if (Object.keys(updatedMessages).length === 0) {
+            // Delete entire document if no messages remain
+            await deleteDoc(docSnapshot.ref);
+            console.log(`🗑️ Deleted entire chat document: ${docSnapshot.id}`);
+          } else {
+            // Update document with remaining messages
+            await updateDoc(docSnapshot.ref, {
+              messages: updatedMessages,
+              lastUpdated: new Date()
+            });
+            console.log(`🧹 Cleaned old messages from chat: ${docSnapshot.id}`);
+          }
+          
+          totalDeletedMessages += deletedMessagesCount;
+          processedChats.push({
+            id: docSnapshot.id,
+            userName: chatData.userName,
+            deletedMessages: deletedMessagesCount,
+            remainingMessages: Object.keys(updatedMessages).length,
+            createdAt: chatData.createdAt
+          });
+        }
       } catch (deleteError) {
-        console.error(`❌ Error deleting message ${docSnapshot.id}:`, deleteError);
+        console.error(`❌ Error processing chat ${docSnapshot.id}:`, deleteError);
       }
     }
     
-    console.log(`✅ Manual cleanup completed. Deleted ${deletedMessages.length} old messages.`);
+    console.log(`✅ Manual cleanup completed. Processed ${processedChats.length} chats, deleted ${totalDeletedMessages} old messages.`);
     
     return {
       success: true,
-      deletedCount: deletedMessages.length,
-      cutoffTime: cutoffTime.toISOString()
+      deletedCount: totalDeletedMessages,
+      cutoffTime: cutoffTime.toISOString(),
+      processedChats: processedChats
     };
     
   } catch (error) {

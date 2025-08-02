@@ -3,9 +3,10 @@ import {
   sendChatMessage, 
   subscribeToChatMessages, 
   generateAnonymousUserId,
-  testCompleteMessageFlow,
+  testChatFlow,
   startAutoCleanup,
-  cleanupExpiredMessages
+  cleanupExpiredMessages,
+  deleteChatThread
 } from '../firebase/firestoreService';
 
 const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
@@ -21,38 +22,40 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
   const cleanupIntervalRef = useRef(null);
 
   // Define connectToChat function with useCallback to prevent unnecessary re-renders
-  const connectToChat = useCallback((userIdToUse) => {
+  const connectToChat = useCallback((userIdToUse, userNameToUse, isNewUser = false) => {
     try {
       setIsLoading(true);
-      console.log('🔌 Connecting to chat for user:', userIdToUse);
+      console.log('🔌 Connecting to chat for user:', userNameToUse, isNewUser ? '(New User)' : '(Existing User)');
+      
+      // If this is a new user (reset), clear messages immediately
+      if (isNewUser) {
+        setMessages([]);
+        setIsConnected(false);
+      }
       
       // Subscribe to messages for this user
       const unsubscribe = subscribeToChatMessages(userIdToUse, (newMessages) => {
         console.log('📨 ChatBox received messages update:', newMessages);
+        
+        // Always update with the latest messages from Firebase
         setMessages(newMessages);
         setIsConnected(true);
         setIsLoading(false);
+        
+        // Add welcome message only if no real messages exist and this is a new user
+        if (isNewUser && newMessages.length === 0) {
+          console.log('👋 Adding welcome message for new user with no messages');
+          setMessages([{
+            id: 'welcome',
+            message: '👋 Hola, Type your message to start chatting...',
+            userName: 'Support Team',
+            sender: 'support',
+            timestamp: new Date()
+          }]);
+        }
       });
       
       unsubscribeRef.current = unsubscribe;
-      
-      // Add welcome message if no messages exist
-      setTimeout(() => {
-        setMessages(prevMessages => {
-          if (prevMessages.length === 0) {
-            console.log('👋 Adding welcome message');
-            return [{
-              id: 'welcome',
-              message: '👋 Hola, Type your message to start chatting...',
-              userName: 'Support Team',
-              messageType: 'support',
-              timestamp: new Date(),
-              createdAt: new Date().toISOString()
-            }];
-          }
-          return prevMessages;
-        });
-      }, 1000);
       
     } catch (error) {
       console.error('Error connecting to chat:', error);
@@ -73,7 +76,7 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
       setUserId(storedUserId);
       setUserName(storedUserName);
       setShowUserSetup(false);
-      connectToChat(storedUserId);
+      connectToChat(storedUserId, storedUserName, false); // false = existing user
     }
   }, [connectToChat]);
 
@@ -94,21 +97,38 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
     };
   }, []);
 
-  const handleUserSetup = () => {
+  const handleUserSetup = async () => {
     if (!userName.trim()) {
       alert('Please enter your name to continue');
       return;
     }
 
-    const newUserId = generateAnonymousUserId();
-    setUserId(newUserId);
+    setIsLoading(true);
     
-    // Store in localStorage for persistence
-    localStorage.setItem('chatUserId', newUserId);
-    localStorage.setItem('chatUserName', userName.trim());
-    
-    setShowUserSetup(false);
-    connectToChat(newUserId);
+    try {
+      // Always generate a new user ID for a fresh session
+      // DO NOT delete previous chat threads from Firebase
+      const newUserId = generateAnonymousUserId();
+      setUserId(newUserId);
+      
+      // Store in localStorage for persistence
+      localStorage.setItem('chatUserId', newUserId);
+      localStorage.setItem('chatUserName', userName.trim());
+      
+      setShowUserSetup(false);
+      
+      // Clear any existing messages state before connecting
+      setMessages([]);
+      setIsConnected(false);
+      
+      // Connect with isNewUser flag set to true
+      connectToChat(newUserId, userName.trim(), true);
+    } catch (error) {
+      console.error('❌ Error setting up user:', error);
+      alert('Failed to set up chat. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSendMessage = async () => {
@@ -119,9 +139,11 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
     setIsLoading(true);
 
     try {
-      await sendChatMessage(messageToSend, userId, userName);
+      console.log('📤 Sending message:', messageToSend, 'for user:', userId, userName);
+      const result = await sendChatMessage(messageToSend, userId, userName);
+      console.log('✅ Message sent successfully:', result);
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('❌ Error sending message:', error);
       alert('Failed to send message. Please try again.');
       setInputMessage(messageToSend); // Restore message
     } finally {
@@ -147,18 +169,38 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const handleResetChat = () => {
-    if (window.confirm('This will start a new chat session. Are you sure?')) {
-      localStorage.removeItem('chatUserId');
-      localStorage.removeItem('chatUserName');
-      setUserId('');
-      setUserName('');
-      setMessages([]);
-      setShowUserSetup(true);
-      setIsConnected(false);
+  const handleResetChat = async () => {
+    if (window.confirm('This will start a new chat session. You can enter a new name and begin fresh. Are you sure?')) {
+      setIsLoading(true);
       
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
+      try {
+        // Unsubscribe from current chat first
+        if (unsubscribeRef.current) {
+          unsubscribeRef.current();
+          unsubscribeRef.current = null;
+        }
+        
+        // DO NOT delete the chat document from Firebase - just clear local state
+        // The old chat will remain in Firebase but user will start completely fresh
+        
+        // Clean up local state and storage completely
+        localStorage.removeItem('chatUserId');
+        localStorage.removeItem('chatUserName');
+        
+        // Reset all state to initial values
+        setUserId('');
+        setUserName('');
+        setMessages([]); // Clear messages array completely
+        setIsConnected(false);
+        setShowUserSetup(true); // Show user setup again
+        setInputMessage(''); // Clear any pending input
+        
+        console.log('✅ Chat reset completed successfully - user will start completely fresh with new identity');
+      } catch (error) {
+        console.error('❌ Error resetting chat:', error);
+        alert('Failed to reset chat. Please try again.');
+      } finally {
+        setIsLoading(false);
       }
     }
   };
@@ -166,7 +208,7 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
   const handleTestResponse = async () => {
     try {
       console.log('🧪 Running comprehensive message flow test...');
-      const result = await testCompleteMessageFlow(userId);
+      const result = await testChatFlow(userId);
       
       if (result.success) {
         console.log('✅ Test completed successfully!', result);
@@ -235,15 +277,18 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
                 placeholder="Enter your name"
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleUserSetup()}
+                onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleUserSetup()}
                 className="setup-input"
+                disabled={isLoading}
                 maxLength={50}
               />
               <button 
                 onClick={handleUserSetup}
+                disabled={isLoading}
                 className="setup-button"
+                style={{ opacity: isLoading ? 0.6 : 1 }}
               >
-                Start Chat
+                {isLoading ? 'Setting up...' : 'Start Chat'}
               </button>
             </div>
             <div className="setup-info">
@@ -259,7 +304,7 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
   }
 
   return (
-    <div className={`chatbox-container ${isFullScreen ? 'fullscreen' : ''}`}>
+    <div className={`chatbox-container ${isFullScreen ? 'fullscreen' : ''}`} key={userId || 'no-user'}>
       <div className="chatbox-header">
         <div className="chatbox-status">
           <div className={`status-indicator ${isConnected ? 'online' : 'offline'}`}></div>
@@ -272,12 +317,23 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
           <button 
             className="reset-btn"
             onClick={handleResetChat}
-            title="Start New Chat"
+            disabled={isLoading}
+            title={isLoading ? "Starting new session..." : "Start new chat session with fresh identity"}
+            style={{ opacity: isLoading ? 0.5 : 1 }}
           >
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none">
-              <polyline points="1 4 1 10 7 10"></polyline>
-              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-            </svg>
+            {isLoading ? (
+              <svg viewBox="0 0 24 24" width="16" height="16" className="loading-spinner">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" strokeDasharray="31.416" strokeDashoffset="31.416">
+                  <animate attributeName="stroke-dasharray" dur="2s" values="0 31.416;15.708 15.708;0 31.416" repeatCount="indefinite"/>
+                  <animate attributeName="stroke-dashoffset" dur="2s" values="0;-15.708;-31.416" repeatCount="indefinite"/>
+                </circle>
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+            )}
           </button>
           {editMode && (
             <>
@@ -334,16 +390,16 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
         </div>
       </div>
       
-      <div className="chatbox-messages">
+      <div className="chatbox-messages" key={`messages-${userId}`}>
         {messages.map((message) => (
           <div 
             key={message.id} 
-            className={`message ${message.messageType === 'support' ? 'support-message' : 'user-message'}`}
+            className={`message ${message.sender === 'support' ? 'support-message' : 'user-message'}`}
           >
             <div className="message-header">
               <span className="message-author">{message.userName}</span>
               <span className="message-timestamp">
-                {formatTimestamp(message.timestamp || message.createdAt)}
+                {formatTimestamp(message.timestamp)}
               </span>
             </div>
             <div className="message-content">
@@ -392,7 +448,7 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
           </button>
         </div>
         <div className="input-info">
-          <small>Messages are sent to our Telegram bot for quick responses</small>
+          <small>Messages are sent to our support team for quick responses</small>
         </div>
       </div>
     </div>

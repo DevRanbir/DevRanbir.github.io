@@ -1,17 +1,15 @@
-# Website Chatbox with Firebase & Telegram Integration
+# Website Chatbox with Firebase Integration
 
-This chatbox system creates a seamless 2-way communication channel between your website visitors and a Telegram bot, with all messages stored in Firebase for persistence and real-time updates.
+This chatbox system creates a seamless communication channel between your website visitors and support team, with all messages stored in Firebase for persistence and real-time updates.
 
 ## System Architecture
 
 ```
 Website Chatbox (Anonymous Users)
             ↓↑
-       Firebase Firestore (Message Storage)
+       Firebase Firestore (Thread-based Storage)
             ↓↑
-     Telegram Bot (via Webhook/Polling)
-            ↓↑
-      Support Team (Telegram Chat)
+      Support Team Interface
 ```
 
 ## Features
@@ -29,11 +27,11 @@ Website Chatbox (Anonymous Users)
 - Support for both user and support messages
 - Automatic scrolling to latest messages
 
-### 🤖 **Telegram Integration**
-- Automatic notification to Telegram when users send messages
-- 2-way communication through Telegram replies
-- Formatted message display in Telegram
-- Support team can respond directly from Telegram app
+### 💾 **Thread-based Storage**
+- Messages organized by user threads
+- Structured data with thread IDs and message IDs
+- Support for multiple conversations per user
+- Automatic message expiration and cleanup
 
 ### 🎨 **Modern UI**
 - Responsive design for all devices
@@ -51,26 +49,36 @@ Website Chatbox (Anonymous Users)
 4. User sends messages which are stored in Firebase
 5. User receives real-time responses from support team
 
-### 2. Telegram Integration Flow
-1. User message triggers Firebase function
-2. Telegram bot is notified via webhook
-3. Support team sees formatted message in Telegram
-4. Support team replies directly in Telegram
-5. Response is sent back to Firebase
-6. User sees response in real-time on website
+### 2. Support Response Flow
+1. Support team can view all active threads
+2. Support team responds to user messages
+3. Response is stored in the user's thread
+4. User sees the response in real-time
 
 ### 3. Data Storage Structure
 
-Firebase stores messages with this structure:
+Firebase stores messages in thread-based structure:
 ```javascript
 {
-  message: "User's message text",
   userId: "user_1625097600000_abc123def",
-  userName: "Anonymous User" | "John Doe",
-  timestamp: Firestore.Timestamp,
+  userName: "John Doe",
+  supportAgentName: "Support Bot",
   createdAt: "2023-07-01T12:00:00.000Z",
-  isFromTelegram: false,
-  messageType: "user" | "support"
+  lastUpdated: "2023-07-01T12:30:00.000Z",
+  messages: {
+    msg_001: {
+      sender: "user",
+      message: "User's message text",
+      timestamp: "2023-07-01T12:00:00.000Z",
+      expiresAt: "2023-07-01T14:00:00.000Z"
+    },
+    msg_002: {
+      sender: "support",
+      message: "Support response",
+      timestamp: "2023-07-01T12:30:00.000Z",
+      expiresAt: "2023-07-01T14:30:00.000Z"
+    }
+  }
 }
 ```
 
@@ -80,22 +88,15 @@ Firebase stores messages with this structure:
 - ✅ Firebase project configured
 - ✅ Firestore collections set up
 - ✅ Real-time listeners implemented
+- ✅ Thread-based message structure implemented
 - ✅ Message storage functions ready
 
-### 2. Telegram Bot Setup
-Follow the detailed instructions in `TELEGRAM_SETUP.md`:
-- Create a Telegram bot with @BotFather
-- Get your bot token and chat ID
-- Deploy webhook server
-- Configure environment variables
-
-### 3. Environment Variables
-Add these to your `.env` file:
-```env
-REACT_APP_TELEGRAM_BOT_TOKEN=your_bot_token
-REACT_APP_TELEGRAM_CHAT_ID=your_chat_id
-REACT_APP_TELEGRAM_WEBHOOK_URL=your_webhook_url
-```
+### 2. Ready to Use
+The chatbox is fully configured and ready to use:
+- Thread-based message storage
+- Real-time chat functionality
+- Automatic message cleanup
+- Anonymous user support
 
 ## Usage
 
@@ -107,8 +108,7 @@ REACT_APP_TELEGRAM_WEBHOOK_URL=your_webhook_url
 5. Use fullscreen mode for better experience
 
 ### For Support Team
-1. Receive notifications in your Telegram chat
-2. Reply directly to messages in Telegram
+Support responses can be added programmatically using the `sendSupportResponse` function.
 3. Responses automatically appear on the website
 4. Monitor all conversations from one place
 
@@ -120,12 +120,11 @@ REACT_APP_TELEGRAM_WEBHOOK_URL=your_webhook_url
 3. Click the "Test" button in the chatbox header
 4. You should see a test response appear
 
-### Full Integration Test
-1. Complete Telegram setup
-2. Send a message from the website
-3. Check your Telegram for the notification
-4. Reply in Telegram
-5. Verify the response appears on the website
+### Thread Structure Test
+1. Send multiple messages from the website
+2. Check Firebase console to see thread structure
+3. Verify messages are organized properly
+4. Test message cleanup functionality
 
 ## File Structure
 
@@ -137,9 +136,8 @@ src/
 │   └── Contacts.css            # Enhanced styles
 ├── firebase/
 │   └── firestoreService.js     # Firebase functions (updated)
-└── services/
-    ├── telegramService.js      # Telegram API integration
-    └── webhookHandler.js       # Webhook response handling
+└── utils/
+    └── chatCleanup.js          # Message cleanup utilities
 ```
 
 ## Security Considerations
@@ -153,14 +151,14 @@ src/
 ### 🛡️ **Data Protection**
 - Firebase security rules (should be configured)
 - HTTPS for all communications
-- Webhook endpoint validation
-- Rate limiting (recommended)
+- Thread-based data organization
+- Automatic cleanup and data retention
 
 ### 🔒 **API Security**
-- Bot token kept secure in environment variables
-- Webhook URL validation
+- Environment variables for configuration
 - CORS configuration
 - Error handling without data leakage
+- Thread-based access control
 
 ## Monitoring & Analytics
 
@@ -172,7 +170,7 @@ src/
 
 ### System Health
 - Firebase connection status
-- Telegram webhook status
+- Thread creation and updates
 - Error rate monitoring
 - Performance metrics
 

@@ -1124,6 +1124,7 @@ body:has(.chatbox-section.fullscreen) .command-line-container {
 }
 
 .message-author {
+  display: none;
   font-size: 12px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.7);
@@ -1227,6 +1228,25 @@ body:has(.chatbox-section.fullscreen) .command-line-container {
 .reset-btn:hover {
   background: rgba(255, 255, 255, 0.2);
   border-color: #be00ff;
+}
+
+.reset-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Loading spinner animation */
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Enhanced Input Area */
