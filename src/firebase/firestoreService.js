@@ -1,4 +1,4 @@
-import { db } from './config';
+import { db, ensureAuthenticated } from './config';
 import { 
   doc, 
   getDoc, 
@@ -100,6 +100,9 @@ const defaultContactsData = {
 // Initialize the document with default data if it doesn't exist
 export const initializeHomepageData = async () => {
   try {
+    // Ensure user is authenticated before making Firestore calls
+    await ensureAuthenticated();
+    
     const docSnap = await getDoc(homepageDocRef);
     
     if (!docSnap.exists()) {
@@ -119,6 +122,9 @@ export const initializeHomepageData = async () => {
 // Get homepage data
 export const getHomepageData = async () => {
   try {
+    // Ensure user is authenticated before making Firestore calls
+    await ensureAuthenticated();
+    
     const docSnap = await getDoc(homepageDocRef);
     
     if (docSnap.exists()) {
@@ -214,6 +220,9 @@ export const updateHomepageData = async (data) => {
 // Initialize documents data
 export const initializeDocumentsData = async () => {
   try {
+    // Ensure user is authenticated before making Firestore calls
+    await ensureAuthenticated();
+    
     const docSnap = await getDoc(documentsDocRef);
     
     if (!docSnap.exists()) {
@@ -233,6 +242,9 @@ export const initializeDocumentsData = async () => {
 // Get documents data
 export const getDocumentsData = async () => {
   try {
+    // Ensure user is authenticated before making Firestore calls
+    await ensureAuthenticated();
+    
     const docSnap = await getDoc(documentsDocRef);
     
     if (docSnap.exists()) {
@@ -279,6 +291,9 @@ export const subscribeToDocumentsData = (callback) => {
 // Initialize projects data
 export const initializeProjectsData = async () => {
   try {
+    // Ensure user is authenticated before making Firestore calls
+    await ensureAuthenticated();
+    
     const docSnap = await getDoc(projectsDocRef);
     
     if (!docSnap.exists()) {
@@ -298,6 +313,9 @@ export const initializeProjectsData = async () => {
 // Get projects data
 export const getProjectsData = async () => {
   try {
+    // Ensure user is authenticated before making Firestore calls
+    await ensureAuthenticated();
+    
     const docSnap = await getDoc(projectsDocRef);
     
     if (docSnap.exists()) {
@@ -374,6 +392,9 @@ export const subscribeToProjectsData = (callback) => {
 // Initialize about data
 export const initializeAboutData = async () => {
   try {
+    // Ensure user is authenticated before making Firestore calls
+    await ensureAuthenticated();
+    
     const docSnap = await getDoc(aboutDocRef);
     
     if (!docSnap.exists()) {
@@ -393,6 +414,9 @@ export const initializeAboutData = async () => {
 // Get about data
 export const getAboutData = async () => {
   try {
+    // Ensure user is authenticated before making Firestore calls
+    await ensureAuthenticated();
+    
     const docSnap = await getDoc(aboutDocRef);
     
     if (docSnap.exists()) {
@@ -435,6 +459,9 @@ export const subscribeToAboutData = (callback) => {
 // Initialize contacts data with default values if document doesn't exist
 export const initializeContactsData = async () => {
   try {
+    // Ensure user is authenticated before making Firestore calls
+    await ensureAuthenticated();
+    
     const docSnap = await getDoc(contactsDocRef);
     
     if (!docSnap.exists()) {
@@ -454,6 +481,9 @@ export const initializeContactsData = async () => {
 // Get contacts data from Firestore
 export const getContactsData = async () => {
   try {
+    // Ensure user is authenticated before making Firestore calls
+    await ensureAuthenticated();
+    
     const docSnap = await getDoc(contactsDocRef);
     
     if (docSnap.exists()) {
@@ -1129,6 +1159,9 @@ export const manualCleanup = async (hoursOld = 2) => {
  */
 export const getGithubSyncMetadata = async () => {
   try {
+    // Ensure user is authenticated before making Firestore calls
+    await ensureAuthenticated();
+    
     const docSnap = await getDoc(githubSyncDocRef);
     
     if (docSnap.exists()) {
@@ -1157,6 +1190,9 @@ export const getGithubSyncMetadata = async () => {
  */
 export const updateGithubSyncMetadata = async (metadata) => {
   try {
+    // Ensure user is authenticated before making Firestore calls
+    await ensureAuthenticated();
+    
     await updateDoc(githubSyncDocRef, {
       ...metadata,
       lastUpdated: new Date().toISOString()

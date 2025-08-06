@@ -1,6 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import * as firestoreExports from "firebase/firestore";
 
 // Your web app's Firebase configuration
@@ -20,7 +21,38 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Cloud Firestore and get a reference to the service
 export const db = getFirestore(app);
+
+// Initialize Firebase Authentication and get a reference to the service
+export const auth = getAuth(app);
+
+// Function to ensure user is authenticated (anonymously if needed)
+export const ensureAuthenticated = async () => {
+  return new Promise((resolve, reject) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      unsubscribe(); // Stop listening after first state change
+      
+      if (user) {
+        // User is already signed in
+        console.log('🔐 User already authenticated:', user.isAnonymous ? 'Anonymous' : 'Authenticated');
+        resolve(user);
+      } else {
+        // No user signed in, sign in anonymously
+        try {
+          console.log('🔐 Signing in anonymously...');
+          const userCredential = await signInAnonymously(auth);
+          console.log('✅ Anonymous authentication successful');
+          resolve(userCredential.user);
+        } catch (error) {
+          console.error('❌ Anonymous authentication failed:', error);
+          reject(error);
+        }
+      }
+    });
+  });
+};
+
 window.db = db;
+window.auth = auth;
 
 
 window.firebase = { firestoreExports };
