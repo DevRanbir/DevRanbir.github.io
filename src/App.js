@@ -3,10 +3,13 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Homepage from './components/Homepage';
 import Documents from './components/Documents';
 import Projects from './components/Projects';
+import MyProjects from './components/MyProjects';
+import ProjectDetail from './components/ProjectDetail';
 import About from './components/About';
 import Contacts from './components/Contacts';
 import Controller from './components/Controller';
 import './App.css';
+import './components/CommandLine.css';
 
 // Import chat cleanup utility (automatically starts cleanup)
 import './utils/chatCleanup';
@@ -100,6 +103,8 @@ function App() {
           <Route path="/" element={<Homepage />} />
           <Route path="/documents" element={<Documents />} />
           <Route path="/projects" element={<Projects />} />
+          <Route path="/myprojects" element={<MyProjects />} />
+          <Route path="/myprojects/:projectName" element={<ProjectDetail />} />
           <Route path="/about" element={<About />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/controller" element={<Controller />} />

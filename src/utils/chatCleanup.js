@@ -21,7 +21,11 @@ export const initializeCleanup = () => {
   
   // Run cleanup immediately
   cleanupExpiredMessages().then(result => {
-    console.log('🧹 Initial cleanup completed:', result);
+    if (result && result.success === false && result.reason === 'Firebase not configured') {
+      console.log('⚠️ Chat cleanup skipped - Firebase not configured');
+    } else {
+      console.log('🧹 Initial cleanup completed:', result);
+    }
   }).catch(error => {
     console.error('❌ Initial cleanup failed:', error);
   });
@@ -31,7 +35,11 @@ export const initializeCleanup = () => {
     try {
       console.log('🧹 Running scheduled cleanup...');
       const result = await cleanupExpiredMessages();
-      console.log('🧹 Scheduled cleanup completed:', result);
+      if (result && result.success === false && result.reason === 'Firebase not configured') {
+        console.log('⚠️ Chat cleanup skipped - Firebase not configured');
+      } else {
+        console.log('🧹 Scheduled cleanup completed:', result);
+      }
     } catch (error) {
       console.error('❌ Scheduled cleanup failed:', error);
     }

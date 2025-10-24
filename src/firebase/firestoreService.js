@@ -34,15 +34,41 @@ const CHAT_COLLECTION = 'chat-messages';
 const GITHUB_SYNC_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
 const GITHUB_SYNC_DOC_ID = 'github-sync-metadata';
 
-// Collection and document references
-const homepageDocRef = doc(db, 'website-content', HOMEPAGE_DOC_ID);
-const documentsDocRef = doc(db, 'website-content', DOCUMENTS_DOC_ID);
-const projectsDocRef = doc(db, 'website-content', PROJECTS_DOC_ID);
-const aboutDocRef = doc(db, 'website-content', ABOUT_DOC_ID);
-const contactsDocRef = doc(db, 'website-content', CONTACTS_DOC_ID);
+// Helper to get document references lazily (db can be null if Firebase isn't configured)
+const getHomepageDocRef = () => {
+  if (!db) throw new Error('Firebase is not configured. Check your environment variables.');
+  return doc(db, 'website-content', HOMEPAGE_DOC_ID);
+};
 
-// GitHub sync metadata document reference
-const githubSyncDocRef = doc(db, 'website-content', GITHUB_SYNC_DOC_ID);
+const getDocumentsDocRef = () => {
+  if (!db) throw new Error('Firebase is not configured. Check your environment variables.');
+  return doc(db, 'website-content', DOCUMENTS_DOC_ID);
+};
+
+const getProjectsDocRef = () => {
+  if (!db) throw new Error('Firebase is not configured. Check your environment variables.');
+  return doc(db, 'website-content', PROJECTS_DOC_ID);
+};
+
+const getAboutDocRef = () => {
+  if (!db) throw new Error('Firebase is not configured. Check your environment variables.');
+  return doc(db, 'website-content', ABOUT_DOC_ID);
+};
+
+const getContactsDocRef = () => {
+  if (!db) throw new Error('Firebase is not configured. Check your environment variables.');
+  return doc(db, 'website-content', CONTACTS_DOC_ID);
+};
+
+const getGithubSyncDocRef = () => {
+  if (!db) throw new Error('Firebase is not configured. Check your environment variables.');
+  return doc(db, 'website-content', GITHUB_SYNC_DOC_ID);
+};
+
+const getChatCollectionRef = () => {
+  if (!db) throw new Error('Firebase is not configured. Check your environment variables.');
+  return getChatCollectionRef();
+};
 
 // Default data structure
 const defaultData = {
@@ -103,10 +129,10 @@ export const initializeHomepageData = async () => {
     // Ensure user is authenticated before making Firestore calls
     await ensureAuthenticated();
     
-    const docSnap = await getDoc(homepageDocRef);
+    const docSnap = await getDoc(getHomepageDocRef());
     
     if (!docSnap.exists()) {
-      await setDoc(homepageDocRef, defaultData);
+      await setDoc(getHomepageDocRef(), defaultData);
       console.log('Homepage data initialized with default values');
       return defaultData;
     } else {
@@ -125,7 +151,7 @@ export const getHomepageData = async () => {
     // Ensure user is authenticated before making Firestore calls
     await ensureAuthenticated();
     
-    const docSnap = await getDoc(homepageDocRef);
+    const docSnap = await getDoc(getHomepageDocRef());
     
     if (docSnap.exists()) {
       return docSnap.data();
@@ -142,7 +168,7 @@ export const getHomepageData = async () => {
 // Update social links
 export const updateSocialLinks = async (socialLinks) => {
   try {
-    await updateDoc(homepageDocRef, {
+    await updateDoc(getHomepageDocRef(), {
       socialLinks: socialLinks.map(({ id, url }) => ({ id, url })), // Remove JSX icons for storage
       lastUpdated: new Date().toISOString()
     });
@@ -156,7 +182,7 @@ export const updateSocialLinks = async (socialLinks) => {
 // Update author description
 export const updateAuthorDescription = async (description) => {
   try {
-    await updateDoc(homepageDocRef, {
+    await updateDoc(getHomepageDocRef(), {
       authorDescription: description,
       lastUpdated: new Date().toISOString()
     });
@@ -170,7 +196,7 @@ export const updateAuthorDescription = async (description) => {
 // Update author skills
 export const updateAuthorSkills = async (skills) => {
   try {
-    await updateDoc(homepageDocRef, {
+    await updateDoc(getHomepageDocRef(), {
       authorSkills: skills,
       lastUpdated: new Date().toISOString()
     });
@@ -183,7 +209,7 @@ export const updateAuthorSkills = async (skills) => {
 
 // Listen to real-time updates
 export const subscribeToHomepageData = (callback) => {
-  return onSnapshot(homepageDocRef, (doc) => {
+  return onSnapshot(getHomepageDocRef(), (doc) => {
     if (doc.exists()) {
       callback(doc.data());
     } else {
@@ -207,7 +233,7 @@ export const updateHomepageData = async (data) => {
       updateData.socialLinks = updateData.socialLinks.map(({ id, url }) => ({ id, url }));
     }
     
-    await updateDoc(homepageDocRef, updateData);
+    await updateDoc(getHomepageDocRef(), updateData);
     console.log('Homepage data updated successfully');
   } catch (error) {
     console.error('Error updating homepage data:', error);
@@ -223,10 +249,10 @@ export const initializeDocumentsData = async () => {
     // Ensure user is authenticated before making Firestore calls
     await ensureAuthenticated();
     
-    const docSnap = await getDoc(documentsDocRef);
+    const docSnap = await getDoc(getDocumentsDocRef());
     
     if (!docSnap.exists()) {
-      await setDoc(documentsDocRef, defaultDocumentsData);
+      await setDoc(getDocumentsDocRef(), defaultDocumentsData);
       console.log('Documents data initialized with default values');
       return defaultDocumentsData;
     } else {
@@ -245,7 +271,7 @@ export const getDocumentsData = async () => {
     // Ensure user is authenticated before making Firestore calls
     await ensureAuthenticated();
     
-    const docSnap = await getDoc(documentsDocRef);
+    const docSnap = await getDoc(getDocumentsDocRef());
     
     if (docSnap.exists()) {
       return docSnap.data();
@@ -262,7 +288,7 @@ export const getDocumentsData = async () => {
 // Update documents
 export const updateDocuments = async (documents) => {
   try {
-    await updateDoc(documentsDocRef, {
+    await updateDoc(getDocumentsDocRef(), {
       documents: documents,
       lastUpdated: new Date().toISOString()
     });
@@ -275,7 +301,7 @@ export const updateDocuments = async (documents) => {
 
 // Listen to real-time updates for documents
 export const subscribeToDocumentsData = (callback) => {
-  return onSnapshot(documentsDocRef, (doc) => {
+  return onSnapshot(getDocumentsDocRef(), (doc) => {
     if (doc.exists()) {
       callback(doc.data());
     } else {
@@ -294,10 +320,10 @@ export const initializeProjectsData = async () => {
     // Ensure user is authenticated before making Firestore calls
     await ensureAuthenticated();
     
-    const docSnap = await getDoc(projectsDocRef);
+    const docSnap = await getDoc(getProjectsDocRef());
     
     if (!docSnap.exists()) {
-      await setDoc(projectsDocRef, defaultProjectsData);
+      await setDoc(getProjectsDocRef(), defaultProjectsData);
       console.log('Projects data initialized with default values');
       return defaultProjectsData;
     } else {
@@ -316,7 +342,7 @@ export const getProjectsData = async () => {
     // Ensure user is authenticated before making Firestore calls
     await ensureAuthenticated();
     
-    const docSnap = await getDoc(projectsDocRef);
+    const docSnap = await getDoc(getProjectsDocRef());
     
     if (docSnap.exists()) {
       return docSnap.data();
@@ -367,7 +393,7 @@ export const updateProjects = async (projects) => {
       return project;
     });
     
-    await updateDoc(projectsDocRef, {
+    await updateDoc(getProjectsDocRef(), {
       projects: updatedProjects,
       lastUpdated: new Date().toISOString()
     });
@@ -380,7 +406,7 @@ export const updateProjects = async (projects) => {
 
 // Listen to real-time updates for projects
 export const subscribeToProjectsData = (callback) => {
-  return onSnapshot(projectsDocRef, (doc) => {
+  return onSnapshot(getProjectsDocRef(), (doc) => {
     if (doc.exists()) {
       callback(doc.data());
     }
@@ -395,10 +421,10 @@ export const initializeAboutData = async () => {
     // Ensure user is authenticated before making Firestore calls
     await ensureAuthenticated();
     
-    const docSnap = await getDoc(aboutDocRef);
+    const docSnap = await getDoc(getAboutDocRef());
     
     if (!docSnap.exists()) {
-      await setDoc(aboutDocRef, defaultAboutData);
+      await setDoc(getAboutDocRef(), defaultAboutData);
       console.log('About data initialized with default values');
       return defaultAboutData;
     } else {
@@ -417,7 +443,7 @@ export const getAboutData = async () => {
     // Ensure user is authenticated before making Firestore calls
     await ensureAuthenticated();
     
-    const docSnap = await getDoc(aboutDocRef);
+    const docSnap = await getDoc(getAboutDocRef());
     
     if (docSnap.exists()) {
       return docSnap.data();
@@ -434,7 +460,7 @@ export const getAboutData = async () => {
 // Update about data
 export const updateAboutData = async (aboutData) => {
   try {
-    await updateDoc(aboutDocRef, {
+    await updateDoc(getAboutDocRef(), {
       ...aboutData,
       lastUpdated: new Date().toISOString()
     });
@@ -447,7 +473,7 @@ export const updateAboutData = async (aboutData) => {
 
 // Listen to real-time updates for about data
 export const subscribeToAboutData = (callback) => {
-  return onSnapshot(aboutDocRef, (doc) => {
+  return onSnapshot(getAboutDocRef(), (doc) => {
     if (doc.exists()) {
       callback(doc.data());
     }
@@ -462,10 +488,10 @@ export const initializeContactsData = async () => {
     // Ensure user is authenticated before making Firestore calls
     await ensureAuthenticated();
     
-    const docSnap = await getDoc(contactsDocRef);
+    const docSnap = await getDoc(getContactsDocRef());
     
     if (!docSnap.exists()) {
-      await setDoc(contactsDocRef, defaultContactsData);
+      await setDoc(getContactsDocRef(), defaultContactsData);
       console.log('Contacts data initialized with default values');
       return defaultContactsData;
     } else {
@@ -484,7 +510,7 @@ export const getContactsData = async () => {
     // Ensure user is authenticated before making Firestore calls
     await ensureAuthenticated();
     
-    const docSnap = await getDoc(contactsDocRef);
+    const docSnap = await getDoc(getContactsDocRef());
     
     if (docSnap.exists()) {
       return docSnap.data();
@@ -501,7 +527,7 @@ export const getContactsData = async () => {
 // Update contacts description
 export const updateContactsDescription = async (description) => {
   try {
-    await updateDoc(contactsDocRef, {
+    await updateDoc(getContactsDocRef(), {
       description: description,
       lastUpdated: new Date().toISOString()
     });
@@ -515,7 +541,7 @@ export const updateContactsDescription = async (description) => {
 // Update social media bubbles
 export const updateSocialBubbles = async (socialBubbles) => {
   try {
-    await updateDoc(contactsDocRef, {
+    await updateDoc(getContactsDocRef(), {
       socialBubbles: socialBubbles,
       lastUpdated: new Date().toISOString()
     });
@@ -529,7 +555,7 @@ export const updateSocialBubbles = async (socialBubbles) => {
 // Update location details
 export const updateLocationDetails = async (locationDetails) => {
   try {
-    await updateDoc(contactsDocRef, {
+    await updateDoc(getContactsDocRef(), {
       locationDetails: locationDetails,
       lastUpdated: new Date().toISOString()
     });
@@ -542,7 +568,7 @@ export const updateLocationDetails = async (locationDetails) => {
 
 // Listen to real-time updates for contacts data
 export const subscribeToContactsData = (callback) => {
-  return onSnapshot(contactsDocRef, (doc) => {
+  return onSnapshot(getContactsDocRef(), (doc) => {
     if (doc.exists()) {
       callback(doc.data());
     }
@@ -576,6 +602,8 @@ const getChatDocRef = (userName, userId) => {
   const safeDocId = `${safeUserName}_${userIdSuffix}`;
   
   console.log('🔑 Document ID for userName:', userName, 'userId:', userId, '→', safeDocId);
+  
+  if (!db) throw new Error('Firebase is not configured. Check your environment variables.');
   return doc(db, CHAT_COLLECTION, safeDocId);
 };
 
@@ -790,7 +818,7 @@ export const subscribeToChatMessages = (userId, callback) => {
 export const subscribeToAllChatThreads = (callback) => {
   try {
     const q = query(
-      collection(db, CHAT_COLLECTION),
+      getChatCollectionRef(),
       orderBy('lastUpdated', 'desc'),
       limit(100)
     );
@@ -961,6 +989,12 @@ export const testChatFlow = async (testUserId = 'test-user-flow') => {
  * This function should be called periodically to clean up old messages
  */
 export const cleanupExpiredMessages = async () => {
+  // Skip cleanup if Firebase is not configured
+  if (!db) {
+    console.warn('⚠️ Skipping chat cleanup - Firebase is not configured');
+    return { success: false, reason: 'Firebase not configured', deletedMessages: 0, deletedChats: 0 };
+  }
+
   try {
     console.log('🧹 Starting cleanup of expired chat messages...');
     
@@ -968,7 +1002,7 @@ export const cleanupExpiredMessages = async () => {
     const cutoffTime = new Date(now.getTime() - (2 * 60 * 60 * 1000)); // 2 hours ago
     
     const q = query(
-      collection(db, CHAT_COLLECTION),
+      getChatCollectionRef(),
       where('lastUpdated', '<', cutoffTime)
     );
     
@@ -1079,7 +1113,7 @@ export const manualCleanup = async (hoursOld = 2) => {
     console.log(`🧹 Manual cleanup: Deleting messages older than ${hoursOld} hours...`);
     
     const q = query(
-      collection(db, CHAT_COLLECTION),
+      getChatCollectionRef(),
       where('lastUpdated', '<', cutoffTime)
     );
     
@@ -1162,7 +1196,7 @@ export const getGithubSyncMetadata = async () => {
     // Ensure user is authenticated before making Firestore calls
     await ensureAuthenticated();
     
-    const docSnap = await getDoc(githubSyncDocRef);
+    const docSnap = await getDoc(getGithubSyncDocRef());
     
     if (docSnap.exists()) {
       return docSnap.data();
@@ -1176,7 +1210,7 @@ export const getGithubSyncMetadata = async () => {
         isAutoSyncEnabled: false,
         syncIntervalId: null
       };
-      await setDoc(githubSyncDocRef, defaultMetadata);
+      await setDoc(getGithubSyncDocRef(), defaultMetadata);
       return defaultMetadata;
     }
   } catch (error) {
@@ -1193,7 +1227,7 @@ export const updateGithubSyncMetadata = async (metadata) => {
     // Ensure user is authenticated before making Firestore calls
     await ensureAuthenticated();
     
-    await updateDoc(githubSyncDocRef, {
+    await updateDoc(getGithubSyncDocRef(), {
       ...metadata,
       lastUpdated: new Date().toISOString()
     });
@@ -1706,7 +1740,7 @@ export const resetAllUserEditFlags = async () => {
       return project;
     });
     
-    await updateDoc(projectsDocRef, {
+    await updateDoc(getProjectsDocRef(), {
       projects: resetProjects,
       lastUpdated: new Date().toISOString()
     });
@@ -1808,7 +1842,7 @@ export const forceSyncProject = async (projectId, username = 'DevRanbir') => {
       }
     };
     
-    await updateDoc(projectsDocRef, {
+    await updateDoc(getProjectsDocRef(), {
       projects: projects,
       lastUpdated: new Date().toISOString()
     });
@@ -1843,7 +1877,7 @@ export const removeProjectFromDatabase = async (projectId) => {
       throw new Error(`Project with ID ${projectId} not found`);
     }
     
-    await updateDoc(projectsDocRef, {
+    await updateDoc(getProjectsDocRef(), {
       projects: filteredProjects,
       lastUpdated: new Date().toISOString()
     });
@@ -1860,4 +1894,6 @@ export const removeProjectFromDatabase = async (projectId) => {
     throw error;
   }
 };
+
+
 

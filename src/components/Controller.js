@@ -1921,7 +1921,7 @@ const Controller = () => {
                           <div className="project-external-links">
                             {project.repoUrl && (
                               <a href={project.repoUrl} target="_blank" rel="noopener noreferrer" className="external-link repository-link">
-                                📁 Repository
+                                  Repository
                               </a>
                             )}
                             {project.liveUrl && (

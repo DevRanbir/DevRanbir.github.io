@@ -52,7 +52,7 @@ Welcome to my personal portfolio – a sophisticated digital showcase that combi
 - **Live Status**: Discord integration via Lanyard API
 - **Skills Showcase**: Animated skill tags with descriptions
 
-### 📁 **Documents Section**
+###   **Documents Section**
 - **File Management**: Upload and organize documents
 - **Type Categorization**: Videos, images, PDFs, and more
 - **Drag & Drop**: Intuitive file reordering

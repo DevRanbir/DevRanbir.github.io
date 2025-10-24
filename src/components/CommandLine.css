@@ -1,0 +1,470 @@
+/* Command Line Interface */
+.command-line-container {
+  position: absolute;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  max-width: 60%;
+  z-index: 1000;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+.glass-panel {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  overflow: hidden;
+}
+
+.command-input-wrapper {
+  display: flex;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.prompt-symbol {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 18px;
+  font-weight: bold;
+  margin-right: 10px;
+}
+
+.command-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: white;
+  font-size: 16px;
+  caret-color: white;
+  z-index: 5000;
+}
+
+.command-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Dropdown Indicator */
+.dropdown-indicator {
+  margin-left: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.3s ease;
+  pointer-events: none;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.dropdown-indicator.open {
+  color: rgba(0, 255, 150, 0.8);
+  transform: rotate(0deg);
+}
+
+.dropdown-indicator.closed {
+  color: rgba(255, 255, 255, 0.6);
+  transform: rotate(0deg);
+}
+
+.dropdown-indicator svg {
+  transition: transform 0.3s ease;
+}
+
+.dropdown-indicator.open svg {
+  transform: rotate(0deg);
+}
+
+.dropdown-indicator.closed svg {
+  transform: rotate(0deg);
+}
+
+/* Dropdown Panel */
+.dropdown-panel {
+  padding: 20px;
+  max-height: 350px;
+  overflow-y: auto;
+  z-index: 10000;
+}
+
+.explorer-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.explorer-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.explorer-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.15) 0%, rgba(79, 70, 229, 0.1) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 20px;
+}
+
+.explorer-item:hover {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  border-color: rgba(147, 51, 234, 0.5);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3), 0 0 0 1px rgba(147, 51, 234, 0.3) inset;
+}
+
+.explorer-item:hover::before {
+  opacity: 1;
+}
+
+.item-icon {
+  font-size: 18px;
+  margin: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+
+.explorer-item:hover .item-icon {
+  transform: scale(1.1);
+  filter: drop-shadow(0 4px 8px rgba(147, 51, 234, 0.5));
+}
+
+.item-name {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.95);
+  white-space: nowrap;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  position: relative;
+  z-index: 1;
+  transition: all 0.3s ease;
+  margin: 0;
+}
+
+.explorer-item:hover .item-name {
+  color: #ffffff;
+  text-shadow: 0 2px 8px rgba(147, 51, 234, 0.6);
+}
+
+/* Command Template Items */
+.explorer-item.command-template {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.7) 0%, rgba(20, 20, 20, 0.6) 100%);
+  display: flex;
+  flex-direction: column;
+  padding: 18px 15px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.explorer-item.command-template::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.15) 0%, rgba(79, 70, 229, 0.1) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.explorer-item.command-template:hover {
+  transform: translateY(-4px) scale(1.02);
+  border-color: rgba(147, 51, 234, 0.4);
+}
+
+.explorer-item.command-template:hover::before {
+  opacity: 1;
+}
+
+.explorer-item.command-template .item-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 1;
+  display: none;
+}
+
+.explorer-item.command-template .item-name {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.95);
+  position: relative;
+  z-index: 1;
+  letter-spacing: 0.5px;
+}
+
+.explorer-item.command-template:hover .item-name {
+  color: #ffffff;
+  text-shadow: 0 2px 8px rgba(147, 51, 234, 0.6);
+}
+
+.explorer-item.command-template .item-description {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: normal;
+  line-height: 1.4;
+  position: relative;
+  z-index: 1;
+}
+
+.explorer-item.command-template:hover .item-description {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Scrollbar styling */
+.dropdown-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dropdown-panel::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  margin: 4px 0;
+}
+
+.dropdown-panel::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.4) 0%, rgba(79, 70, 229, 0.4) 100%);
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+.dropdown-panel::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.6) 0%, rgba(79, 70, 229, 0.6) 100%);
+}
+
+/* Command Message */
+.command-message {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 30px;
+  font-size: 14px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  animation: fadeInUp 0.3s ease, fadeOut 0.3s ease 2.7s;
+  max-width: 80%;
+  text-align: center;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Responsive Styles for Command Line */
+@media (max-width: 768px) {
+  .command-line-container {
+    width: 55%;
+    max-width: 65%;
+    top: 15px;
+  }
+  
+  .command-input-wrapper {
+    padding: 12px 16px;
+  }
+  
+  .prompt-symbol {
+    font-size: 16px;
+    margin-right: 8px;
+  }
+  
+  .command-input {
+    font-size: 14px;
+  }
+  
+  .dropdown-indicator {
+    margin-left: 8px;
+    padding: 2px;
+  }
+  
+  .dropdown-panel {
+    padding: 16px 12px;
+    max-height: 280px;
+  }
+  
+  .explorer-grid {
+    gap: 4px;
+    justify-content: center;
+  }
+  
+  .explorer-item {
+    padding: 6px 10px;
+    gap: 5px;
+    border-radius: 16px;
+    min-width: auto;
+  }
+  
+  .explorer-item:hover {
+    transform: translateY(-1px) scale(1.02);
+  }
+  
+  .item-icon {
+    font-size: 14px;
+  }
+  
+  .item-name {
+    font-size: 11px;
+    letter-spacing: 0.2px;
+  }
+  
+  .explorer-item.command-template {
+    padding: 14px 12px;
+    min-width: 120px;
+  }
+  
+  .explorer-item.command-template .item-icon {
+    font-size: 20px;
+    margin-bottom: 6px;
+  }
+  
+  .explorer-item.command-template .item-name {
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+  
+  .explorer-item.command-template .item-description {
+    font-size: 10px;
+    line-height: 1.3;
+  }
+  
+  .command-message {
+    bottom: 20px;
+    padding: 10px 16px;
+    font-size: 12px;
+    max-width: 90%;
+  }
+}
+
+/* Extra small screens (phones in portrait) */
+@media (max-width: 480px) {
+  .command-line-container {
+    width: 98%;
+    max-width: 75%;
+    top: 40px;
+  }
+  
+  .command-input-wrapper {
+    padding: 10px 12px;
+  }
+  
+  .prompt-symbol {
+    font-size: 14px;
+    margin-right: 6px;
+  }
+  
+  .command-input {
+    font-size: 13px;
+  }
+  
+  .dropdown-panel {
+    padding: 12px 8px;
+    max-height: 250px;
+  }
+  
+  .explorer-grid {
+    gap: 3px;
+  }
+  
+  .explorer-item {
+    padding: 5px 8px;
+    gap: 4px;
+    border-radius: 14px;
+    font-size: 10px;
+  }
+  
+  .item-icon {
+    font-size: 12px;
+  }
+  
+  .item-name {
+    font-size: 10px;
+    letter-spacing: 0.1px;
+  }
+  
+  .explorer-item.command-template {
+    padding: 12px 10px;
+    min-width: 100px;
+  }
+  
+  .explorer-item.command-template .item-icon {
+    font-size: 18px;
+    margin-bottom: 4px;
+  }
+  
+  .explorer-item.command-template .item-name {
+    font-size: 11px;
+    margin-bottom: 3px;
+  }
+  
+  .explorer-item.command-template .item-description {
+    font-size: 9px;
+    line-height: 1.2;
+  }
+  
+  .command-message {
+    bottom: 15px;
+    padding: 8px 12px;
+    font-size: 11px;
+    border-radius: 20px;
+  }
+}
+
+/* Large screens optimization */
+@media (min-width: 1200px) {
+  .command-line-container {
+    max-width: 50%;
+  }
+  
+  .dropdown-panel {
+    max-height: 400px;
+  }
+}
