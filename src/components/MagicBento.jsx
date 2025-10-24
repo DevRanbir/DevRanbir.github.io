@@ -517,27 +517,29 @@ const MagicBento = ({
     e.stopPropagation(); // Prevent card click from firing
     const icon = e.currentTarget;
     
-    // On mobile, skip the animation and directly perform the action
-    if (isMobile) {
-      if (isTopIcon && link) {
-        window.open(link, '_blank', 'noopener,noreferrer');
-      } else if (!isTopIcon && cardTitle) {
-        navigate(`/myprojects/${encodeURIComponent(cardTitle)}`);
-      }
-      return;
-    }
-    
-    // Desktop: Add clicked animation class
+    // Add clicked animation class
     icon.classList.add('icon-clicked');
     
-    // If it's the top-right icon and has a link, open it in new tab
-    if (isTopIcon && link && icon.classList.contains('icon-active')) {
-      window.open(link, '_blank', 'noopener,noreferrer');
-    }
-    
-    // If it's the bottom-right icon, navigate to project detail page
-    if (!isTopIcon && cardTitle && icon.classList.contains('icon-active')) {
-      navigate(`/myprojects/${encodeURIComponent(cardTitle)}`);
+    // Perform the action based on icon type and available data
+    if (isTopIcon && link) {
+      // Top-right icon: open link (external links in new tab, internal links in same tab)
+      if (link.startsWith('http') || link.startsWith('//')) {
+        window.open(link, '_blank', 'noopener,noreferrer');
+      } else {
+        navigate(link);
+      }
+    } else if (!isTopIcon) {
+      // Bottom-right icon: navigate to link if available, otherwise to project detail
+      if (link) {
+        if (link.startsWith('http') || link.startsWith('//')) {
+          window.open(link, '_blank', 'noopener,noreferrer');
+        } else {
+          navigate(link);
+        }
+      } else if (cardTitle) {
+        // Fallback to project detail page (for MyProjects compatibility)
+        navigate(`/myprojects/${encodeURIComponent(cardTitle)}`);
+      }
     }
     
     // Remove the class after animation completes
@@ -555,7 +557,19 @@ const MagicBento = ({
     const topIcon = card.querySelector('.card__icon--top-right');
     const bottomIcon = card.querySelector('.card__icon--bottom-right');
     
-    if (!topIcon || !bottomIcon) return;
+    // If no icons exist, skip
+    if (!topIcon && !bottomIcon) return;
+    
+    // If only one icon exists, activate it
+    if (topIcon && !bottomIcon) {
+      topIcon.classList.add('icon-active');
+      return;
+    }
+    
+    if (bottomIcon && !topIcon) {
+      bottomIcon.classList.add('icon-active');
+      return;
+    }
 
     const cardRect = card.getBoundingClientRect();
     const relativeY = e.clientY - cardRect.top;
@@ -620,6 +634,7 @@ const MagicBento = ({
           const baseClassName = `card ${textAutoHide ? 'card--text-autohide' : ''} ${enableBorderGlow ? 'card--border-glow' : ''} ${card.image ? 'card--has-image' : ''}`;
           const cardProps = {
             className: baseClassName,
+            'data-type': card.type || 'default',
             style: {
               backgroundColor: card.color,
               '--glow-color': glowColor,
@@ -647,43 +662,99 @@ const MagicBento = ({
                 onMouseLeave={handleCardMouseLeave}
                 onClick={(e) => handleCardClick(e, card)}
               >
-                <svg 
-                  className="card__icon card__icon--top-right" 
-                  aria-hidden="true" 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  width="16" 
-                  height="16" 
-                  fill="none" 
-                  viewBox="0 0 24 24"
-                  onClick={(e) => handleIconClick(e, card.title, card.link, true)}
-                >
-                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 14v4.833A1.166 1.166 0 0 1 16.833 20H5.167A1.167 1.167 0 0 1 4 18.833V7.167A1.166 1.166 0 0 1 5.167 6h4.618m4.447-2H20v5.768m-7.889 2.121 7.778-7.778"/>
-                </svg>
-                <div className="card__header">
-                  <div className="card__labels">
-                    {(card.labels || [card.label]).filter(Boolean).map((label, idx) => (
-                      <span key={idx} className="card__label" data-count={(card.labels || [card.label]).filter(Boolean).length}>
-                        {label}
-                      </span>
-                    ))}
+                {/* Top-right icon - Show if controls is 1.1, 2, or undefined (default) */}
+                {(card.controls === 1.1 || card.controls === 2 || card.controls === undefined) && (
+                  <svg 
+                    className="card__icon card__icon--top-right" 
+                    aria-hidden="true" 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    width="16" 
+                    height="16" 
+                    fill="none" 
+                    viewBox="0 0 24 24"
+                    onClick={(e) => handleIconClick(e, card.title, card.link, true)}
+                  >
+                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 14v4.833A1.166 1.166 0 0 1 16.833 20H5.167A1.167 1.167 0 0 1 4 18.833V7.167A1.166 1.166 0 0 1 5.167 6h4.618m4.447-2H20v5.768m-7.889 2.121 7.778-7.778"/>
+                  </svg>
+                )}
+                
+                {/* Conditional content - Spline, card type, or regular card content */}
+                {card.splineUrl ? (
+                  // Spline content only
+                  <>
+                    <spline-viewer 
+                      url={card.splineUrl}
+                      onError={() => console.warn('Spline scene failed to load')}
+                    ></spline-viewer>
+                    <div className="spline-cover"></div>
+                  </>
+                ) : card.type === 'textual' ? (
+                  // Textual card - no labels, just title and full description
+                  <div className="card__content card__content--textual">
+                    <h2 className="card__title">{card.title}</h2>
+                    <p className="card__description card__description--full">{card.description}</p>
                   </div>
-                </div>
-                <div className="card__content">
-                  <h2 className="card__title">{card.title}</h2>
-                  <p className="card__description">{card.description}</p>
-                </div>
-                <svg 
-                  className="card__icon card__icon--bottom-right" 
-                  aria-hidden="true" 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  width="16" 
-                  height="16" 
-                  fill="none" 
-                  viewBox="0 0 24 24"
-                  onClick={(e) => handleIconClick(e, card.title, card.link, false)}
-                >
-                  <path stroke="currentColor" strokeLinecap="round" strokeWidth="2" d="m21 21-3.5-3.5M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/>
-                </svg>
+                ) : card.type === 'img' ? (
+                  // Image card - only labels and image background
+                  <div className="card__header">
+                    <div className="card__labels">
+                      {(card.labels || [card.label]).filter(Boolean).map((label, idx) => (
+                        <span key={idx} className="card__label" data-count={(card.labels || [card.label]).filter(Boolean).length}>
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : card.type === 'label' ? (
+                  // Label card - larger font labels (comma-separated), title, no description
+                  <>
+                    <div className="card__content card__content--label">
+                      <h2 className="card__title">{card.title}</h2>
+                      <p 
+                        className="card__labels-text" 
+                        data-label-count={(card.labels || []).filter(Boolean).length}
+                        style={{
+                          '--label-count': (card.labels || []).filter(Boolean).length
+                        }}
+                      >
+                        {(card.labels || []).filter(Boolean).join(', ')}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  // Default card content (labels, title, description)
+                  <>
+                    <div className="card__header">
+                      <div className="card__labels">
+                        {(card.labels || [card.label]).filter(Boolean).map((label, idx) => (
+                          <span key={idx} className="card__label" data-count={(card.labels || [card.label]).filter(Boolean).length}>
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="card__content">
+                      <h2 className="card__title">{card.title}</h2>
+                      <p className="card__description">{card.description}</p>
+                    </div>
+                  </>
+                )}
+                
+                {/* Bottom-right icon - Show if controls is 1.2, 2, or undefined (default) */}
+                {(card.controls === 1.2 || card.controls === 2 || card.controls === undefined) && (
+                  <svg 
+                    className="card__icon card__icon--bottom-right" 
+                    aria-hidden="true" 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    width="16" 
+                    height="16" 
+                    fill="none" 
+                    viewBox="0 0 24 24"
+                    onClick={(e) => handleIconClick(e, card.title, card.link, false)}
+                  >
+                    <path stroke="currentColor" strokeLinecap="round" strokeWidth="2" d="m21 21-3.5-3.5M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/>
+                  </svg>
+                )}
               </ParticleCard>
             );
           }
@@ -802,43 +873,83 @@ const MagicBento = ({
                 el.addEventListener('mouseleave', handleMouseLeave);
                 el.addEventListener('click', handleClick);
               }}>
-              <svg 
-                className="card__icon card__icon--top-right" 
-                aria-hidden="true" 
-                xmlns="http://www.w3.org/2000/svg" 
-                width="16" 
-                height="16" 
-                fill="none" 
-                viewBox="0 0 24 24"
-                onClick={(e) => handleIconClick(e, card.title, card.link, true)}
-              >
-                <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 14v4.833A1.166 1.166 0 0 1 16.833 20H5.167A1.167 1.167 0 0 1 4 18.833V7.167A1.166 1.166 0 0 1 5.167 6h4.618m4.447-2H20v5.768m-7.889 2.121 7.778-7.778"/>
-              </svg>
-              <div className="card__header">
-                <div className="card__labels">
-                  {(card.labels || [card.label]).filter(Boolean).map((label, idx) => (
-                    <span key={idx} className="card__label" data-count={(card.labels || [card.label]).filter(Boolean).length}>
-                      {label}
-                    </span>
-                  ))}
+              {/* Top-right icon - Show if controls is 1.1, 2, or undefined (default) */}
+              {(card.controls === 1.1 || card.controls === 2 || card.controls === undefined) && (
+                <svg 
+                  className="card__icon card__icon--top-right" 
+                  aria-hidden="true" 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  width="16" 
+                  height="16" 
+                  fill="none" 
+                  viewBox="0 0 24 24"
+                  onClick={(e) => handleIconClick(e, card.title, card.link, true)}
+                >
+                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 14v4.833A1.166 1.166 0 0 1 16.833 20H5.167A1.167 1.167 0 0 1 4 18.833V7.167A1.166 1.166 0 0 1 5.167 6h4.618m4.447-2H20v5.768m-7.889 2.121 7.778-7.778"/>
+                </svg>
+              )}
+              
+              {/* Conditional content - Spline, card type, or regular card content */}
+              {card.splineUrl ? (
+                // Spline content only
+                <>
+                  <spline-viewer 
+                    url={card.splineUrl}
+                    onError={() => console.warn('Spline scene failed to load')}
+                  ></spline-viewer>
+                  <div className="spline-cover"></div>
+                </>
+              ) : card.type === 'textual' ? (
+                // Textual card - no labels, just title and full description
+                <div className="card__content card__content--textual">
+                  <h2 className="card__title">{card.title}</h2>
+                  <p className="card__description card__description--full">{card.description}</p>
                 </div>
-              </div>
-              <div className="card__content">
-                <h2 className="card__title">{card.title}</h2>
-                <p className="card__description">{card.description}</p>
-              </div>
-              <svg 
-                className="card__icon card__icon--bottom-right" 
-                aria-hidden="true" 
-                xmlns="http://www.w3.org/2000/svg" 
-                width="16" 
-                height="16" 
-                fill="none" 
-                viewBox="0 0 24 24"
-                onClick={(e) => handleIconClick(e, card.title, card.link, false)}
-              >
-                <path stroke="currentColor" strokeLinecap="round" strokeWidth="2" d="m21 21-3.5-3.5M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/>
-              </svg>
+              ) : card.type === 'img' ? (
+                // Image card - only labels and image background
+                <div className="card__header">
+                  <div className="card__labels">
+                    {(card.labels || [card.label]).filter(Boolean).map((label, idx) => (
+                      <span key={idx} className="card__label" data-count={(card.labels || [card.label]).filter(Boolean).length}>
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                // Default card content (labels, title, description)
+                <>
+                  <div className="card__header">
+                    <div className="card__labels">
+                      {(card.labels || [card.label]).filter(Boolean).map((label, idx) => (
+                        <span key={idx} className="card__label" data-count={(card.labels || [card.label]).filter(Boolean).length}>
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="card__content">
+                    <h2 className="card__title">{card.title}</h2>
+                    <p className="card__description">{card.description}</p>
+                  </div>
+                </>
+              )}
+              
+              {/* Bottom-right icon - Show if controls is 1.2, 2, or undefined (default) */}
+              {(card.controls === 1.2 || card.controls === 2 || card.controls === undefined) && (
+                <svg 
+                  className="card__icon card__icon--bottom-right" 
+                  aria-hidden="true" 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  width="16" 
+                  height="16" 
+                  fill="none" 
+                  viewBox="0 0 24 24"
+                  onClick={(e) => handleIconClick(e, card.title, card.link, false)}
+                >
+                  <path stroke="currentColor" strokeLinecap="round" strokeWidth="2" d="m21 21-3.5-3.5M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/>
+                </svg>
+              )}
             </div>
           );
         })}

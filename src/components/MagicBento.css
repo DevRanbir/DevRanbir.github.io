@@ -404,3 +404,40 @@
   );
 }
 
+/* Label card type - larger font labels displayed as comma-separated text */
+.card__content--label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  overflow: hidden;
+}
+
+.card__labels-text {
+  font-size: 1.1em;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  word-wrap: break-word;
+}
+
+/* Dynamic font sizing based on content length */
+.card__labels-text:has(*) {
+  font-size: clamp(0.7em, 1.1em - 0.015em * var(--label-count, 0), 1.1em);
+}
+
+/* Adjust font size based on text length using container query approach */
+.card__content--label:has(.card__labels-text) {
+  container-type: inline-size;
+}
+
+@supports (container-type: inline-size) {
+  .card__labels-text {
+    font-size: clamp(0.65em, 2cqw + 0.3em, 1.1em);
+    line-height: 1.4;
+  }
+}
+
