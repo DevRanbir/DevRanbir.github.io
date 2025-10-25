@@ -1,15 +1,16 @@
 import React, { useEffect, useState, useCallback} from 'react';
 import { useNavigate } from 'react-router-dom';
-import './Homepage.css';
+import '../homepage/Homepage.css';
 import './ProjectsStyles.css';
-import Lanyard from './Lanyard';
-import AnimatedList from './AnimatedList';
-import LoadingOverlay from './LoadingOverlay';
-import FullScreenPrompt from './FullScreenPrompt';
+import Lanyard from '../../components/Lanyard';
+import AnimatedList from '../../components/AnimatedList';
+import LoadingOverlay from '../../components/LoadingOverlay';
+import FullScreenPrompt from '../../components/FullScreenPrompt';
+import { loadSplineScript } from '../../utils/splineLoader';
 import { 
   getProjectsData, 
   updateProjects, 
-} from '../firebase/firestoreService';
+} from '../../firebase/firestoreService';
 
 const Projects = () => {
   const navigate = useNavigate();
@@ -955,37 +956,11 @@ const Projects = () => {
     window.addEventListener('projectsDataUpdated', handleProjectsUpdate);
 
     
-    // Load the latest Spline viewer script with enhanced error handling
-    const script = document.createElement('script');
-    script.type = 'module';
-    script.src = 'https://unpkg.com/@splinetool/viewer@latest/build/spline-viewer.js';
-    script.onload = () => {
-      // Add a small delay to ensure the script is fully loaded
-      setTimeout(() => {
-        const splineViewer = document.querySelector('spline-viewer');
-        if (splineViewer) {
-          // Add error event listener to handle WebGL errors
-          splineViewer.addEventListener('error', (e) => {
-            console.warn('Spline viewer error:', e.detail);
-          });
-          
-          // Add load event listener
-          splineViewer.addEventListener('load', () => {
-            console.log('Spline scene loaded successfully');
-          });
-        }
-      }, 100);
-    };
-    script.onerror = () => {
-      console.warn('Failed to load Spline viewer script, falling back to basic version');
-    };
-    document.head.appendChild(script);
+    // Load Spline viewer script using centralized loader
+    loadSplineScript();
 
     return () => {
-      // Cleanup script when component unmounts
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
+      window.removeEventListener('projectsDataUpdated', handleProjectsUpdate);
     };
   }, []);
   

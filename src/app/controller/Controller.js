@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './Homepage.css'; // Reusing Homepage.css
+import '../homepage/Homepage.css'; // Reusing Homepage.css
 import './Controller.css'; // New styles for Controller component
-import Lanyard from './Lanyard';
-import LoadingOverlay from './LoadingOverlay';
-import FullScreenPrompt from './FullScreenPrompt';
+import Lanyard from '../../components/Lanyard';
+import LoadingOverlay from '../../components/LoadingOverlay';
+import FullScreenPrompt from '../../components/FullScreenPrompt';
 
 import { 
   getHomepageData, 
@@ -30,10 +30,10 @@ import {
   updateSocialBubbles,
   updateLocationDetails,
   subscribeToContactsData
-} from '../firebase/firestoreService';
+} from '../../firebase/firestoreService';
 
 // GitHub sync service import
-import githubSyncService from '../services/githubSyncService';
+import githubSyncService from '../../services/githubSyncService';
 
 const Controller = () => {
   const navigate = useNavigate();

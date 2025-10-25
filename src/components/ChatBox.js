@@ -5,8 +5,7 @@ import {
   generateAnonymousUserId,
   testChatFlow,
   startAutoCleanup,
-  cleanupExpiredMessages,
-  deleteChatThread
+  cleanupExpiredMessages
 } from '../firebase/firestoreService';
 
 const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {

@@ -1,14 +1,17 @@
-import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Homepage from './components/Homepage';
-import Documents from './components/Documents';
-import Projects from './components/Projects';
-import MyProjects from './components/MyProjects';
-import Home from './components/Home';
-import ProjectDetail from './components/ProjectDetail';
-import About from './components/About';
-import Contacts from './components/Contacts';
-import Controller from './components/Controller';
+import React, { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import Homepage from './app/homepage/Homepage';
+import Documents from './app/documents/Documents';
+import Projects from './app/projects/Projects';
+import MyProjects from './app/myprojects/MyProjects';
+import Home from './app/home/Home';
+import ProjectDetail from './app/projectdetail/ProjectDetail';
+import About from './app/about/About';
+import Contacts from './app/contacts/Contacts';
+import Controller from './app/controller/Controller';
+import NotFound from './app/notfound/NotFound';
+import Loading from './app/loading/Loading';
+import LoadingOverlay from './components/LoadingOverlay';
 import './App.css';
 import './components/CommandLine.css';
 
@@ -17,6 +20,31 @@ import './utils/chatCleanup';
 
 // Import GitHub sync service
 import { initializeGitHubSync } from './services/githubSyncService';
+
+// Route loader component
+function RouteLoader({ children }) {
+  const location = useLocation();
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    // Show loading overlay when route changes
+    setIsLoading(true);
+    
+    // Hide loading overlay after a short delay (simulating route load)
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500); // Adjust duration as needed
+
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
+
+  return (
+    <>
+      {isLoading && <LoadingOverlay />}
+      {children}
+    </>
+  );
+}
 
 function App() {
   useEffect(() => {
@@ -42,6 +70,14 @@ function App() {
   useEffect(() => {
     const handleGlobalError = (event) => {
       const errorMessage = event.error?.message || event.message || '';
+      
+      // Suppress Spline viewer duplicate registration errors
+      if (errorMessage.includes('spline-viewer') && 
+          errorMessage.includes('already been used with this registry')) {
+        console.warn('🎭 Spline viewer duplicate registration suppressed (handled by centralized loader)');
+        event.preventDefault();
+        return false;
+      }
       
       // Suppress Three.js BufferGeometry NaN errors
       if (errorMessage.includes('THREE.BufferGeometry.computeBoundingSphere') ||
@@ -100,18 +136,22 @@ function App() {
   return (
     <div className="App">
       <Router>
-        <Routes>
-          <Route path="/" element={<Homepage />} />
-          <Route path="/documents" element={<Documents />} />
-          <Route path="/projects" element={<Projects />} />
-          <Route path="/myprojects" element={<MyProjects />} />
-          <Route path="/home" element={<Home />} />
-          <Route path="/myprojects/:projectName" element={<ProjectDetail />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/contacts" element={<Contacts />} />
-          <Route path="/controller" element={<Controller />} />
-          <Route path="/god" element={<Controller />} />
-        </Routes>
+        <RouteLoader>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/home" element={<Homepage />} />
+            <Route path="/documents" element={<Documents />} />
+            <Route path="/projects" element={<MyProjects />} />
+            <Route path="/myprojects" element={<Projects />} />
+            <Route path="/projects/:projectName" element={<ProjectDetail />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/contacts" element={<Contacts />} />
+            <Route path="/controller" element={<Controller />} />
+            <Route path="/god" element={<Controller />} />
+            <Route path="/loading" element={<Loading />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </RouteLoader>
       </Router>
     </div>
   );

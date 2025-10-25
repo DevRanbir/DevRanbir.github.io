@@ -441,3 +441,16 @@
   }
 }
 
+/* Spline card labels - positioned over the Spline viewer */
+.card__header--spline {
+  position: absolute;
+  top: 1.25em;
+  left: 1.25em;
+  right: 1.25em;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.card__header--spline .card__labels {
+  pointer-events: auto;
+}

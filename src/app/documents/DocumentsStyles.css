@@ -1,4 +1,23 @@
 /* Additional styles for Documents component */
+spline-viewer {
+  width: 100%;
+  height: 100%;
+  display: block;
+  top: auto;
+  left: auto;
+  position: relative;
+}
+.spline-cover {
+  position: absolute;
+  bottom: 17px;
+  right: 51%;
+  width: 150px;
+  height: 50px;
+  background:  black;
+  z-index: 3;
+  pointer-events: none;
+}
+
 
 .documents-section {
   position: absolute ! important;
@@ -43,11 +62,12 @@
 }
 
 .documents-header-image {
-  max-width: 300px;
+  max-width: 400px;
   max-height: 600px;
   object-fit: contain;
   filter: drop-shadow(0 0 10px rgba(0, 150, 255, 0.3));
   margin-bottom: -80px;
+  margin-left: 15%;
 }
 
 .documents-list {

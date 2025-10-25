@@ -1,19 +1,20 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './Homepage.css'; // Reusing Homepage styles
-import './About.css'; // New styles for About-specific content
-import Lanyard from './Lanyard'; // Importing Lanyard component
-import LoadingOverlay from './LoadingOverlay';
-import FullScreenPrompt from './FullScreenPrompt';
+import './Homepage.css';
+import TextType from '../../components/TextType';
+import Lanyard from '../../components/Lanyard'
+import LoadingOverlay from '../../components/LoadingOverlay';
+import FullScreenPrompt from '../../components/FullScreenPrompt';
+import { loadSplineScript } from '../../utils/splineLoader';
 import { 
-  getAboutData, 
-  subscribeToAboutData,
-  getHomepageData,
+  updateSocialLinks, 
+  updateAuthorDescription, 
+  updateAuthorSkills,
   subscribeToHomepageData,
-  updateSocialLinks 
-} from '../firebase/firestoreService';
+  initializeHomepageData
+} from '../../firebase/firestoreService';
 
-const About = () => {
+const Homepage = () => {
   const navigate = useNavigate();
 
   const [commandInput, setCommandInput] = useState('');
@@ -22,57 +23,38 @@ const About = () => {
   const [passwordInput, setPasswordInput] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordError, setPasswordError] = useState('');
-  const [commandMessage, setCommandMessage] = useState('');
-  const [showCommandMessage, setShowCommandMessage] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [editingSocial, setEditingSocial] = useState(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
-  // About data state
-  const [aboutData, setAboutData] = useState({
-    githubReadmeUrl: 'https://api.github.com/repos/DevRanbir/DevRanbir/readme',
-    githubUsername: 'DevRanbir',
-    repositoryName: 'DevRanbir'
-  });
-  // Social links from homepage data (synced with homepage)
+  const [editingAuthor, setEditingAuthor] = useState(false);
+  const [authorDescription, setAuthorDescription] = useState("");
+  const [tempAuthorDescription, setTempAuthorDescription] = useState("");
+  const [authorSkills, setAuthorSkills] = useState([]);
+  const [isAddingSkill, setIsAddingSkill] = useState(false);
+  const [newSkillInput, setNewSkillInput] = useState('');
   const [socialLinks, setSocialLinks] = useState([]);
   const [editFormData, setEditFormData] = useState({
     name: '',
     iconType: '',
     url: ''
   });
-  const [readme, setReadme] = useState('');
-  const [readmeLoading, setReadmeLoading] = useState(true);
-  const [readmeError, setReadmeError] = useState(null);
-  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
-  const [scrollInterval, setScrollInterval] = useState(null);
+  const [commandMessage, setCommandMessage] = useState('');
+  const [showCommandMessage, setShowCommandMessage] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
 
   // Memoized callback to prevent useEffect loops in LoadingOverlay
   const handleLoadingComplete = useCallback(() => {
-    console.log('👤 About: LoadingOverlay completed, hiding overlay');
+    console.log('🏠 Homepage: LoadingOverlay completed, hiding overlay');
     setShowLoadingOverlay(false);
   }, []);
 
-  // Dropdown items for navigation
+  // Firestore subscription unsubscribe function
+  const [unsubscribe, setUnsubscribe] = useState(null);
+
+  // Dummy dropdown items for Windows Explorer style interface
   const dropdownItems = [
     { 
       id: 1, 
-      name: 'Contact', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.079 6.839a3 3 0 0 0-4.255.1M13 20h1.083A3.916 3.916 0 0 0 18 16.083V9A6 6 0 1 0 6 9v7m7 4v-1a1 1 0 0 0-1-1h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1Zm-7-4v-6H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1Zm12-6h1a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-1v-6Z"/>
-      </svg>, 
-      type: 'action' 
-    },
-    { 
-      id: 2, 
-      name: 'Home', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m4 12 8-8 8 8M6 10.5V19a1 1 0 0 0 1 1h3v-3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3h3a1 1 0 0 0 1-1v-8.5"/>
-      </svg>, 
-      type: 'action' 
-    },
-    { 
-      id: 3, 
       name: 'Documents', 
       icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
         <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 11H4m15.5 5a.5.5 0 0 0 .5-.5V8a1 1 0 0 0-1-1h-3.75a1 1 0 0 1-.829-.44l-1.436-2.12a1 1 0 0 0-.828-.44H8a1 1 0 0 0-1 1M4 9v10a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1h-3.75a1 1 0 0 1-.829-.44L9.985 8.44A1 1 0 0 0 9.157 8H5a1 1 0 0 0-1 1Z"/>
@@ -80,12 +62,28 @@ const About = () => {
       type: 'folder' 
     },
     { 
-      id: 4, 
+      id: 2, 
       name: 'Projects', 
       icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
         <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 9h6m-6 3h6m-6 3h6M6.996 9h.01m-.01 3h.01m-.01 3h.01M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/>
       </svg>, 
       type: 'folder' 
+    },
+    { 
+      id: 5, 
+      name: 'About', 
+      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 9h3m-3 3h3m-3 3h3m-6 1c-.306-.613-.933-1-1.618-1H7.618c-.685 0-1.312.387-1.618 1M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm7 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z"/>
+      </svg>, 
+      type: 'action' 
+    },
+    { 
+      id: 6, 
+      name: 'Contact', 
+      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.079 6.839a3 3 0 0 0-4.255.1M13 20h1.083A3.916 3.916 0 0 0 18 16.083V9A6 6 0 1 0 6 9v7m7 4v-1a1 1 0 0 0-1-1h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1Zm-7-4v-6H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1Zm12-6h1a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-1v-6Z"/>
+      </svg>, 
+      type: 'action' 
     },
   ];
   
@@ -94,6 +92,10 @@ const About = () => {
     { id: 'add', template: 'add [name] [link]', description: 'Add a new social link' },
     { id: 'edit', template: 'edit [oldname] [oldlink] - [newname] [newlink]', description: 'Edit an existing link' },
     { id: 'remove', template: 'remove [name] link', description: 'Remove a social link' },
+    { id: 'author', template: 'author edit [description]', description: 'Edit author description' },
+    { id: 'skill', template: 'add skill [skillname]', description: 'Add a new skill' },
+    { id: 'editskill', template: 'edit skill [oldname] [newname]', description: 'Edit a skill name' },
+    { id: 'removeskill', template: 'remove skill [skillname]', description: 'Remove a skill' },
     { id: 'exit', template: 'exit', description: 'Exit edit mode' },
   ];
   
@@ -121,12 +123,12 @@ const About = () => {
       console.log(`Selected: ${item.name}`);
       
       // Handle navigation based on the selected item
-      if (item.name === 'Home') {
-        navigate('/');
-      } else if (item.name === 'Documents') {
+      if (item.name === 'Documents') {
         navigate('/documents');
       } else if (item.name === 'Projects') {
         navigate('/projects');
+      } else if (item.name === 'About') {
+        navigate('/about');
       } else if (item.name === 'Contact') {
         navigate('/contacts');
       }
@@ -137,17 +139,13 @@ const About = () => {
     }
   };
   
+  // Password handling and edit mode functionality
   const handleCommandSubmit = (e) => {
     if (e.key === 'Enter') {
       const command = commandInput.toLowerCase().trim();
       
       // Navigation commands (available in both edit and normal mode)
-      if (command === 'home') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/');
-        return;
-      } else if (command === 'documents') {
+      if (command === 'documents') {
         setCommandInput('');
         setIsDropdownOpen(false);
         navigate('/documents');
@@ -156,6 +154,16 @@ const About = () => {
         setCommandInput('');
         setIsDropdownOpen(false);
         navigate('/projects');
+        return;
+      } else if (command === 'about') {
+        setCommandInput('');
+        setIsDropdownOpen(false);
+        navigate('/about');
+        return;
+      } else if (command === 'home') {
+        setCommandInput('');
+        setIsDropdownOpen(false);
+        navigate('/');
         return;
       }
       
@@ -186,6 +194,7 @@ const About = () => {
         navigate('/contacts');
         return;
       }
+      
       if (command === 'edit') {
         setShowPasswordModal(true);
       } else if (command.match(/^edit\s+(.+)\.$/)) {
@@ -205,13 +214,19 @@ const About = () => {
       } else if (editMode) {
         // Process commands only available in edit mode
         
-        // Command pattern: "add [name] [link]" - To add a new social link
-        if (command.match(/^add\s+(\w+)\s+(.+)$/)) {
+        // Command pattern: "add [name] [link]" - To add a new social link (but not skill)
+        if (command.match(/^add\s+(\w+)\s+(.+)$/) && !command.startsWith('add skill')) {
           const matches = command.match(/^add\s+(\w+)\s+(.+)$/);
           const name = matches[1];
           const url = matches[2];
           handleCommandCreateLink(name, url);
         }
+        // Add skill command - must be checked before general add command
+        else if (command.match(/^add skill\s+(.+)$/)) {
+          const matches = command.match(/^add skill\s+(.+)$/);
+          const skillName = matches[1];
+          handleAddSkill(skillName);
+        } 
         // Command pattern: "remove [name] link" - To remove an existing social link
         else if (command.match(/^remove\s+(\w+)\s+link$/)) {
           const name = command.split(' ')[1];
@@ -230,6 +245,35 @@ const About = () => {
         else if (command === 'exit') {
           handleExitEditMode();
         }
+        // Author edit command
+        else if (command === 'author edit') {
+          handleAuthorEdit();
+        }
+        // Author edit with new description command
+        else if (command.match(/^author edit\s+(.+)$/)) {
+          const matches = command.match(/^author edit\s+(.+)$/);
+          const newDescription = matches[1];
+          handleAuthorEditDirect(newDescription);
+        }
+        // Add skill command
+        else if (command.match(/^add skill\s+(.+)$/)) {
+          const matches = command.match(/^add skill\s+(.+)$/);
+          const skillName = matches[1];
+          handleAddSkill(skillName);
+        }
+        // Remove skill command
+        else if (command.match(/^remove skill\s+(.+)$/)) {
+          const matches = command.match(/^remove skill\s+(.+)$/);
+          const skillName = matches[1];
+          handleRemoveSkill(skillName);
+        }
+        // Edit skill command
+        else if (command.match(/^edit skill\s+(.+?)\s+(.+)$/)) {
+          const matches = command.match(/^edit skill\s+(.+?)\s+(.+)$/);
+          const oldSkillName = matches[1];
+          const newSkillName = matches[2];
+          handleEditSkill(oldSkillName, newSkillName);
+        }
       }
       
       // Clear command input after processing
@@ -240,26 +284,21 @@ const About = () => {
   
   const validatePassword = (e) => {
     if (e) e.preventDefault();
-    const correctPassword = 'ranbir195';
+    // In a real application, this would use a secure method to verify the password
+    const correctPassword = 'ranbir195'; // Change this to your secure password
     if (passwordInput === correctPassword) {
       setEditMode(true);
       setShowPasswordModal(false);
       setPasswordInput('');
       setPasswordError('');
-      setCommandInput('');
+      setCommandInput(''); // Clear the command input
+      // Show the dropdown with command templates
       setIsDropdownOpen(true);
     } else {
       setPasswordError('Incorrect password. Please try again.');
     }
   };
   
-  const handleExitEditMode = () => {
-    setEditMode(false);
-    setEditingSocial(null);
-    setIsCreatingNew(false);
-    showMessage("Exited edit mode.");
-  };
-
   const handleSocialEdit = (social) => {
     setEditingSocial(social);
     setIsCreatingNew(false);
@@ -287,28 +326,7 @@ const About = () => {
       [name]: value
     });
   };
-  useEffect(() => {
-      const handleKeyPress = (event) => {
-        // Check if "/" is pressed and no input/textarea is currently focused
-        if (event.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
-          event.preventDefault();
-          const commandInput = document.querySelector('.command-input');
-          if (commandInput) {
-            commandInput.focus();
-          }
-        }
-      };
-  
-      // Add event listener to document
-      document.addEventListener('keydown', handleKeyPress);
-  
-      // Cleanup event listener
-      return () => {
-        document.removeEventListener('keydown', handleKeyPress);
-      };
-    }, []);
-  
-  const handleEditFormSubmit = (e) => {
+    const handleEditFormSubmit = async (e) => {
     e.preventDefault();
     
     let updatedLinks;
@@ -316,10 +334,8 @@ const About = () => {
     
     if (isCreatingNew) {
       // Creating a new social link
-      const newIcon = getDefaultIcon(editFormData.name);
       const newSocial = {
         id: editFormData.name.toLowerCase(),
-        icon: newIcon,
         url: editFormData.url
       };
       
@@ -331,8 +347,7 @@ const About = () => {
       updatedLinks = socialLinks.map(link => 
         link.id === editingSocial.id ? 
         { 
-          ...link, 
-          id: editFormData.name,
+          id: editFormData.name.toLowerCase(),
           url: editFormData.url
         } : 
         link
@@ -340,41 +355,66 @@ const About = () => {
       actionMessage = `"${oldName}" link has been updated to "${editFormData.name}".`;
     }
     
-    // Update the links in Firestore
-    updateSocialLinksToFirestore(updatedLinks, actionMessage);
+    // Save to Firestore
+    await saveDataToFirestore('socialLinks', updatedLinks);
+    
+    // Show success message
+    showMessage(actionMessage);
     
     // Reset the editing state
     setEditingSocial(null);
     setIsCreatingNew(false);
   };
-  
-  const handleRemoveSocial = (socialId) => {
+
+  const handleRemoveSocial = async (socialId) => {
     const link = socialLinks.find(link => link.id === socialId);
     const updatedLinks = socialLinks.filter(link => link.id !== socialId);
     
+    // Save to Firestore
+    await saveDataToFirestore('socialLinks', updatedLinks);
+    
     if (link) {
-      const actionMessage = `The "${link.id}" link has been removed.`;
-      updateSocialLinksToFirestore(updatedLinks, actionMessage);
+      showMessage(`The "${link.id}" link has been removed.`);
     }
   };
+  
+  // Show a temporary command result message
+  const showMessage = (message) => {
+    setCommandMessage(message);
+    setShowCommandMessage(true);
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      setShowCommandMessage(false);
+    }, 3000);
+  };
 
-  // Helper function to update social links to Firestore
-  const updateSocialLinksToFirestore = async (updatedLinks, successMessage) => {
+  // Save updated data to Firestore
+  const saveDataToFirestore = async (key, data) => {
     try {
-      // Update local state immediately for better UX
-      setSocialLinks(updatedLinks);
+      switch (key) {
+        case 'socialLinks':
+          await updateSocialLinks(data);
+          break;
+        case 'authorDescription':
+          await updateAuthorDescription(data);
+          break;
+        case 'authorSkills':
+          await updateAuthorSkills(data);
+          break;
+        default:
+          throw new Error(`Invalid data key: ${key}`);
+      }
       
-      // Save to Firestore
-      await updateSocialLinks(updatedLinks);
-      showMessage(successMessage);
-    } catch (error) {
-      console.error('Error updating social links:', error);
-      showMessage('Error updating social links. Please try again.');
+      showMessage(`${key} updated successfully!`);
+    } catch (err) {
+      console.error(`Error updating ${key}:`, err);
+      showMessage(`Error: Failed to update ${key}`);
     }
   };
-
+  
   // Command handlers for social link operations
-  const handleCommandCreateLink = (name, url) => {
+  const handleCommandCreateLink = async (name, url) => {
     // Check if a link with this name already exists
     const exists = socialLinks.some(link => link.id.toLowerCase() === name.toLowerCase());
     if (exists) {
@@ -382,20 +422,19 @@ const About = () => {
       return;
     }
     
-    // Create the new link directly
-    const newIcon = getDefaultIcon(name);
+    // Create the new link
     const newSocial = {
       id: name.toLowerCase(),
-      icon: newIcon,
       url: url
     };
     
     const updatedLinks = [...socialLinks, newSocial];
-    const actionMessage = `New "${name}" link has been added.`;
-    updateSocialLinksToFirestore(updatedLinks, actionMessage);
+    
+    // Save to Firestore
+    await saveDataToFirestore('socialLinks', updatedLinks);
   };
   
-  const handleCommandRemoveLink = (name) => {
+  const handleCommandRemoveLink = async (name) => {
     // Find the link with the given name
     const link = socialLinks.find(link => link.id.toLowerCase() === name.toLowerCase());
     if (!link) {
@@ -405,12 +444,13 @@ const About = () => {
     
     if (window.confirm(`Are you sure you want to remove the "${name}" link?`)) {
       const updatedLinks = socialLinks.filter(link => link.id.toLowerCase() !== name.toLowerCase());
-      const actionMessage = `The "${name}" link has been removed.`;
-      updateSocialLinksToFirestore(updatedLinks, actionMessage);
+      
+      // Save to Firestore
+      await saveDataToFirestore('socialLinks', updatedLinks);
     }
   };
   
-  const handleCommandEditLink = (oldName, oldLink, newName, newLink) => {
+  const handleCommandEditLink = async (oldName, oldLink, newName, newLink) => {
     // Find the link with the given name
     const link = socialLinks.find(link => link.id.toLowerCase() === oldName.toLowerCase());
     if (!link) {
@@ -424,109 +464,128 @@ const About = () => {
       return;
     }
     
-    // Update the link directly
+    // Update the link
     const updatedLinks = socialLinks.map(l => 
       l.id.toLowerCase() === oldName.toLowerCase() 
         ? { 
-            ...l, 
             id: newName.toLowerCase(),
-            url: newLink,
-            icon: getDefaultIcon(newName) // Update icon based on new name
+            url: newLink
           } 
         : l
     );
     
-    const actionMessage = `"${oldName}" link has been updated to "${newName}".`;
-    updateSocialLinksToFirestore(updatedLinks, actionMessage);
+    // Save to Firestore
+    await saveDataToFirestore('socialLinks', updatedLinks);
+  };
+  
+  const handleExitEditMode = () => {
+    setEditMode(false);
+    setEditingSocial(null);
+    setIsCreatingNew(false);
+    setEditingAuthor(false);
+    setIsAddingSkill(false);
+    setNewSkillInput('');
+    showMessage("Exited edit mode.");
   };
 
-  // Show a temporary command result message
-  const showMessage = (message) => {
-    setCommandMessage(message);
-    setShowCommandMessage(true);
+  const handleAuthorEdit = () => {
+    setEditingAuthor(true);
+    setTempAuthorDescription(authorDescription);
+    showMessage("Author edit mode activated. Click the edit button in the author section.");
+  };
+
+  const handleAuthorEditDirect = async (newDescription) => {
+    // Save to Firestore
+    await saveDataToFirestore('authorDescription', newDescription);
+  };
+
+  const handleAuthorSave = async () => {
+    // Save to Firestore
+    await saveDataToFirestore('authorDescription', tempAuthorDescription);
+    setEditingAuthor(false);
+  };
+
+  const handleAuthorCancel = () => {
+    setEditingAuthor(false);
+    setTempAuthorDescription("");
+    showMessage("Author edit cancelled.");
+  };
+
+  const handleAddSkill = async (skillName) => {
+    // Check if skill already exists (case insensitive)
+    const exists = authorSkills.some(skill => skill.toLowerCase() === skillName.toLowerCase());
+    if (exists) {
+      showMessage(`Skill "${skillName}" already exists.`);
+      return;
+    }
     
-    // Auto-hide after 3 seconds
-    setTimeout(() => {
-      setShowCommandMessage(false);
-    }, 3000);
+    const updatedSkills = [...authorSkills, skillName];
+    
+    // Save to Firestore
+    await saveDataToFirestore('authorSkills', updatedSkills);
   };
 
-  // Fetch README content from GitHub API (HTML version)
-  const fetchReadme = async () => {
-    try {
-      setReadmeLoading(true);
-      setReadmeError(null);
+  const handleRemoveSkill = async (skillName) => {
+    // Find skill (case insensitive)
+    const skillIndex = authorSkills.findIndex(skill => skill.toLowerCase() === skillName.toLowerCase());
+    if (skillIndex === -1) {
+      showMessage(`Skill "${skillName}" not found.`);
+      return;
+    }
+    
+    const skillToRemove = authorSkills[skillIndex];
+    
+    if (window.confirm(`Are you sure you want to remove the "${skillToRemove}" skill?`)) {
+      const updatedSkills = authorSkills.filter((_, index) => index !== skillIndex);
       
-      // Use the dynamic GitHub README URL from aboutData
-      const readmeUrl = aboutData.githubReadmeUrl || 'https://api.github.com/repos/DevRanbir/DevRanbir/readme';
-      
-      // Fetch HTML version of README from GitHub API
-      const response = await fetch(
-        readmeUrl,
-        {
-          headers: {
-            Accept: 'application/vnd.github.v3.html'
-          }
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`GitHub API error: ${response.status}`);
-      }
-      
-      // Process HTML to enhance it
-      let processedHtml = await response.text();
-      
-      // Add target="_blank" to all links
-      processedHtml = processedHtml.replace(
-        /<a\s+(?![^>]*\btarget=(['"])_blank\1)[^>]*>/gi,
-        (match) => match.replace(/<a\s/, '<a target="_blank" rel="noopener noreferrer" ')
-      );
-      
-      // Add class to images for animations
-      processedHtml = processedHtml.replace(
-        /<img\s/gi,
-        '<img class="readme-img" '
-      );
-      
-      // Add classes to code blocks for syntax highlighting
-      processedHtml = processedHtml.replace(
-        /<pre>/gi,
-        '<pre class="code-block">'
-      );
-      
-      setReadme(processedHtml);
-    } catch (error) {
-      console.error('Error fetching README:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      if (errorMessage.includes('404')) {
-        setReadmeError('README not found. This user may not have a profile README.');
-      } else if (errorMessage.includes('401') || errorMessage.includes('403')) {
-        setReadmeError('GitHub API rate limit exceeded. Please try again later.');
-      } else {
-        setReadmeError(`Failed to load README: ${errorMessage}`);
-      }
-    } finally {
-      setReadmeLoading(false);
+      // Save to Firestore
+      await saveDataToFirestore('authorSkills', updatedSkills);
     }
   };
 
-  // Effect for loading Spline viewer script
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.type = 'module';
-    script.src = 'https://unpkg.com/@splinetool/viewer@latest/build/spline-viewer.js';
-    script.onerror = () => {
-      console.warn('Failed to load Spline viewer script, falling back to basic version');
-    };
-    document.head.appendChild(script);
+  const handleSkillInputSubmit = async (e) => {
+    e.preventDefault();
+    if (newSkillInput.trim()) {
+      await handleAddSkill(newSkillInput.trim());
+      setNewSkillInput('');
+      setIsAddingSkill(false);
+    }
+  };
 
-    return () => {
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
-    };
+  const handleSkillInputCancel = () => {
+    setNewSkillInput('');
+    setIsAddingSkill(false);
+  };
+
+  const handleEditSkill = async (oldSkillName, newSkillName) => {
+    // Find skill (case insensitive)
+    const skillIndex = authorSkills.findIndex(skill => skill.toLowerCase() === oldSkillName.toLowerCase());
+    if (skillIndex === -1) {
+      showMessage(`Skill "${oldSkillName}" not found.`);
+      return;
+    }
+
+    // Check if new skill name already exists (case insensitive)
+    const exists = authorSkills.some((skill, index) => 
+      skill.toLowerCase() === newSkillName.toLowerCase() && index !== skillIndex
+    );
+    if (exists) {
+      showMessage(`Skill "${newSkillName}" already exists.`);
+      return;
+    }
+
+    // Update the skill
+    const updatedSkills = [...authorSkills];
+    updatedSkills[skillIndex] = newSkillName;
+    
+    // Save to Firestore
+    await saveDataToFirestore('authorSkills', updatedSkills);
+  };
+  
+  // Effect for handling edit command - Removed since it's now handled in handleCommandSubmit
+  useEffect(() => {
+    // Load Spline viewer script using centralized loader
+    loadSplineScript();
   }, []);
 
   // Clock update effect
@@ -535,6 +594,7 @@ const About = () => {
       const now = new Date();
       setCurrentTime(now);
       
+      // Update CSS custom properties for the clock display
       const hours = now.getHours().toString().padStart(2, '0');
       const minutes = now.getMinutes().toString().padStart(2, '0');
       const seconds = now.getSeconds().toString().padStart(2, '0');
@@ -544,122 +604,86 @@ const About = () => {
       document.documentElement.style.setProperty('--timer-seconds', `"${seconds}"`);
     };
 
+    // Update immediately
     updateClock();
+    
+    // Update every second
     const interval = setInterval(updateClock, 1000);
+
     return () => clearInterval(interval);
   }, []);
 
-  // Load social links from Firestore (synced with homepage)
+  // Load homepage data from Firestore and set up real-time listener
   useEffect(() => {
-    const loadHomepageData = async () => {
+    const initializeData = async () => {
       try {
-        const data = await getHomepageData();
-        if (data.socialLinks) {
-          // Reconstruct social links with icons
-          const reconstructedLinks = data.socialLinks.map(link => ({
-            ...link,
-            icon: getDefaultIcon(link.id)
-          }));
-          setSocialLinks(reconstructedLinks);
-        }
-      } catch (error) {
-        console.error('Error loading homepage data:', error);
-      }
-    };
-
-    loadHomepageData();
-
-    // Set up real-time listener for homepage data updates
-    const unsubscribe = subscribeToHomepageData((data) => {
-      if (data.socialLinks) {
-        const reconstructedLinks = data.socialLinks.map(link => ({
-          ...link,
-          icon: getDefaultIcon(link.id)
-        }));
-        setSocialLinks(reconstructedLinks);
-        console.log('Social links updated from homepage data:', reconstructedLinks);
-      }
-    });
-
-    // Listen for homepageDataUpdated events from Controller
-    const handleHomepageDataUpdate = (event) => {
-      if (event.detail && event.detail.data && event.detail.data.socialLinks) {
-        const reconstructedLinks = event.detail.data.socialLinks.map(link => ({
-          ...link,
-          icon: getDefaultIcon(link.id)
-        }));
-        setSocialLinks(reconstructedLinks);
-        console.log('Social links updated from Controller:', reconstructedLinks);
-      }
-    };
-
-    window.addEventListener('homepageDataUpdated', handleHomepageDataUpdate);
-
-    return () => {
-      unsubscribe();
-      window.removeEventListener('homepageDataUpdated', handleHomepageDataUpdate);
-    };
-  }, []);
-
-  // Load About data from Firestore on component mount
-  useEffect(() => {
-    const loadAboutData = async () => {
-      try {
-        const data = await getAboutData();
-        setAboutData(data);
-        console.log('About data loaded:', data);
-      } catch (error) {
-        console.error('Error loading about data:', error);
-        // Use default values if loading fails
-        setAboutData({
-          githubReadmeUrl: 'https://api.github.com/repos/DevRanbir/DevRanbir/readme',
-          githubUsername: 'DevRanbir',
-          repositoryName: 'DevRanbir'
+        // Initialize Firestore data if it doesn't exist
+        await initializeHomepageData();
+        
+        // Set up real-time subscription
+        const unsubscribeFn = subscribeToHomepageData((data) => {
+          console.log('Homepage data updated from Firestore:', data);
+          
+          // Update social links with reconstructed icons
+          if (data.socialLinks) {
+            const linksWithIcons = data.socialLinks.map(link => ({
+              ...link,
+              icon: getDefaultIcon(link.id)
+            }));
+            setSocialLinks(linksWithIcons);
+          }
+          
+          // Update author description
+          if (data.authorDescription) {
+            setAuthorDescription(data.authorDescription);
+          }
+          
+          // Update author skills
+          if (data.authorSkills) {
+            setAuthorSkills(data.authorSkills);
+          }
         });
+        
+        // Store the unsubscribe function
+        setUnsubscribe(() => unsubscribeFn);
+        
+      } catch (err) {
+        console.error('Error initializing homepage data:', err);
       }
     };
-
-    loadAboutData();
-
-    // Set up real-time listener for About data updates
-    const unsubscribe = subscribeToAboutData((data) => {
-      if (data) {
-        setAboutData(data);
-        console.log('About data updated from Firestore:', data);
-        // Re-fetch README when data changes
-        fetchReadme();
-      }
-    });
-
-    // Listen for aboutDataUpdated events from Controller
-    const handleAboutDataUpdate = (event) => {
-      if (event.detail && event.detail.aboutData) {
-        setAboutData(event.detail.aboutData);
-        console.log('About data updated from Controller:', event.detail.aboutData);
-        // Re-fetch README when data changes
-        fetchReadme();
-      }
-    };
-
-    window.addEventListener('aboutDataUpdated', handleAboutDataUpdate);
-
+    
+    initializeData();
+    
+    // Cleanup function
     return () => {
-      unsubscribe();
-      window.removeEventListener('aboutDataUpdated', handleAboutDataUpdate);
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
     // eslint-disable-next-line
-  }, []);
-  
-  // Save social links to localStorage whenever they change
-  // Note: Now using Firestore instead of localStorage for persistence
-  // Social links are saved via updateSocialLinksToFirestore function
+  }, []); // Empty dependency array is intentional - we only want this to run once
 
-  // Fetch README content when component mounts or aboutData changes
+  // Handle "/" key press to focus command line
   useEffect(() => {
-    fetchReadme();
-    // eslint-disable-next-line
-  }, [aboutData.githubReadmeUrl]);
-  
+    const handleKeyPress = (event) => {
+      // Check if "/" is pressed and no input/textarea is currently focused
+      if (event.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+        event.preventDefault();
+        const commandInput = document.querySelector('.command-input');
+        if (commandInput) {
+          commandInput.focus();
+        }
+      }
+    };
+
+    // Add event listener to document
+    document.addEventListener('keydown', handleKeyPress);
+
+    // Cleanup event listener
+    return () => {
+      document.removeEventListener('keydown', handleKeyPress);
+    };
+  }, []);
   // Function to get default icon based on social media name
   const getDefaultIcon = (name) => {
     const iconName = name.toLowerCase();
@@ -681,49 +705,6 @@ const About = () => {
     }
   };
   
-  const toggleAutoScroll = () => {
-    const container = document.querySelector('.readme-viewer');
-    if (!container) return;
-
-    if (isAutoScrolling) {
-        if (scrollInterval) {
-        clearInterval(scrollInterval);
-        setScrollInterval(null);
-        }
-        setIsAutoScrolling(false);
-        return;
-    }
-
-    // Start auto-scroll
-    const speed = 4; // pixels per frame
-    const fps = 120;  // frame rate
-    const interval = setInterval(() => {
-        const maxScroll = container.scrollHeight - container.clientHeight;
-        if (container.scrollTop >= maxScroll - 1) {
-        clearInterval(interval);
-        setScrollInterval(null);
-        setIsAutoScrolling(false);
-        return;
-        }
-        container.scrollTop += speed;
-    }, 2000 / fps); // ~60fps
-
-    setScrollInterval(interval);
-    setIsAutoScrolling(true);
-    };
-
-
-
-
-  // Cleanup auto-scroll on component unmount
-  useEffect(() => {
-    return () => {
-      if (scrollInterval) {
-        clearInterval(scrollInterval);
-      }
-    };
-  }, [scrollInterval]);
-  
   return (
     <div className="homepage">
       {/* FullScreen Prompt - Shows for mobile users */}
@@ -741,7 +722,6 @@ const About = () => {
       <div className={`main-content ${showLoadingOverlay ? 'loading' : 'loaded'}`}>
         {/* Spline 3D Background */}
         <div className="spline-background">
-        <Lanyard position={[2.5, 2, 20]} gravity={[0, -40, 0]} />
         {/* Command Line Interface */}
         <div className="command-line-container">
           <div className="glass-panel">
@@ -751,7 +731,7 @@ const About = () => {
                 <input
                   type="text"
                   className="command-input"
-                  placeholder={editMode ? "Type a command or click a template below..." : "Search, navigate, or run a command..."}
+                  placeholder={editMode ? "Type a command or click a template below..." : "Search, navigate, or run a command"}
                   value={commandInput}
                   onChange={handleInputChange}
                   onFocus={handleInputFocus}
@@ -777,18 +757,20 @@ const About = () => {
               <div className="dropdown-panel">
                 <div className="explorer-grid">
                   {editMode ? 
+                    // Command templates in edit mode
                     commandTemplates.map((cmd) => (
                       <div 
                         key={cmd.id} 
                         className="explorer-item command-template"
                         onClick={() => handleItemClick(cmd)}
                       >
-                        <div className="item-icon">{cmd.id === 'exit' ? '🚪' : cmd.id === 'add' ? '➕' : cmd.id === 'edit' ? '✏️' : cmd.id === 'remove' ? '❌' : '📝'}</div>
+                        <div className="item-icon">{cmd.id === 'exit' ? '🚪' : cmd.id === 'add' ? '➕' : cmd.id === 'edit' ? '✏️' : cmd.id === 'remove' ? '❌' : cmd.id === 'author' ? '👤' : cmd.id === 'skill' ? '🎯' : cmd.id === 'editskill' ? '✏️' : cmd.id === 'removeskill' ? '🗑️' : '📝'}</div>
                         <div className="item-name">{cmd.id}</div>
                         <div className="item-description">{cmd.description}</div>
                       </div>
                     ))
                     :
+                    // Regular items when not in edit mode
                     dropdownItems.map((item) => (
                       <div 
                         key={item.id} 
@@ -805,32 +787,11 @@ const About = () => {
             )}
           </div>
         </div>
+
+        <Lanyard position={[2.5, 2, 20]} gravity={[0, -40, 0]} />
         
         {/* Social Media Links - Vertical Column */}
         <div className="social-links-container">
-          {/* Auto-scroll Play Button - Always at top */}
-          <div className="social-link-wrapper auto-scroll-wrapper">
-            <button 
-              className={`social-link auto-scroll-button ${isAutoScrolling ? 'playing' : ''}`}
-              aria-label={isAutoScrolling ? "Stop auto-scroll" : "Start auto-scroll"}
-              onClick={toggleAutoScroll}
-              title={isAutoScrolling ? "Stop auto-scrolling README" : "Auto-scroll README"}
-            >
-              {isAutoScrolling ? (
-                // Pause icon
-                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="currentColor">
-                  <rect x="6" y="4" width="4" height="16"></rect>
-                  <rect x="14" y="4" width="4" height="16"></rect>
-                </svg>
-              ) : (
-                // Play icon
-                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="currentColor">
-                  <polygon points="5,3 19,12 5,21"></polygon>
-                </svg>
-              )}
-            </button>
-          </div>
-          
           {socialLinks.map((social) => (
             <div key={social.id} className={`social-link-wrapper ${editMode ? 'edit-mode' : ''}`}>
               {editMode && editingSocial?.id === social.id ? (
@@ -970,6 +931,7 @@ const About = () => {
                   />
                 </form>
               </div>
+
               
               <div className="password-modal-buttons">
                 <button 
@@ -993,46 +955,148 @@ const About = () => {
           </div>
         )}
 
-        {/* Command Message */}
+        <div className="author-section">
+          <div className="authornameimg">
+            <img src="pic3.png" alt="Author name" className="author-avatar" />
+          </div>
+          <div className="author-divider"></div>
+          <div className="author-description">
+            <h2>About the Author</h2>
+            {editingAuthor ? (
+              <div className="author-edit-form">
+                <textarea
+                  value={tempAuthorDescription}
+                  onChange={(e) => setTempAuthorDescription(e.target.value)}
+                  className="author-edit-textarea"
+                  rows="4"
+                  placeholder="Enter author description..."
+                />
+                <div className="author-edit-buttons">
+                  <button 
+                    className="author-save-btn" 
+                    onClick={handleAuthorSave}
+                    title="Save changes"
+                  >
+                    ✅ Save
+                  </button>
+                  <button 
+                    className="author-cancel-btn" 
+                    onClick={handleAuthorCancel}
+                    title="Cancel editing"
+                  >
+                    ❌ Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <TextType 
+                  text={authorDescription || ""}
+                  typingSpeed={75}
+                  pauseDuration={1500}
+                  deletingSpeed={0}
+                  showCursor={true}
+                  cursorCharacter="|"
+                  className="text-type"
+                  cursorClassName="text-type__cursor"
+                  loop={false}
+                  hideCursorWhileTyping={false}
+                />
+                {editMode && (
+                  <button 
+                    className="edit-author-btn" 
+                    onClick={() => setEditingAuthor(true)}
+                    title="Edit description"
+                  >
+                    ✏️
+                  </button>
+                )}
+              </>
+            )}
+            
+            {/* Skills Section */}
+            <div className="author-skills-section">
+              <h3>Skills & Technologies</h3>
+              <div className="skills-container">
+                {authorSkills.map((skill, index) => (
+                  <div key={index} className="skill-badge">
+                    <span className="skill-name">{skill}</span>
+                    {editMode && (
+                      <button 
+                        className="remove-skill-btn"
+                        onClick={() => handleRemoveSkill(skill)}
+                        title={`Remove ${skill}`}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {editMode && (
+                  <>
+                    {isAddingSkill ? (
+                      <div className="skill-badge add-skill-input-form">
+                        <form onSubmit={handleSkillInputSubmit} className="skill-input-form">
+                          <input
+                            type="text"
+                            value={newSkillInput}
+                            onChange={(e) => setNewSkillInput(e.target.value)}
+                            placeholder="Enter skill name"
+                            className="skill-input"
+                            autoFocus
+                            onBlur={(e) => {
+                              // Don't close if clicking on save/cancel buttons
+                              if (!e.relatedTarget || (!e.relatedTarget.classList.contains('skill-save-btn') && !e.relatedTarget.classList.contains('skill-cancel-btn'))) {
+                                setTimeout(() => handleSkillInputCancel(), 150);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                handleSkillInputCancel();
+                              }
+                            }}
+                          />
+                          <div className="skill-input-buttons">
+                            <button 
+                              type="submit" 
+                              className="skill-save-btn"
+                              title="Add skill"
+                            >
+                              ✓
+                            </button>
+                            <button 
+                              type="button" 
+                              className="skill-cancel-btn"
+                              onClick={handleSkillInputCancel}
+                              title="Cancel"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    ) : (
+                      <div 
+                        className="skill-badge add-skill-badge"
+                        onClick={() => setIsAddingSkill(true)}
+                      >
+                        <span className="add-skill-text">+ Add Skill</span>
+                        <div className="add-skill-tooltip">Click to add or use: add skill [name]</div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Command Message - For feedback on command actions */}
         {showCommandMessage && (
           <div className="command-message">
             {commandMessage}
           </div>
         )}
-
-        {/* README Content Display */}
-        <div className="readme-content-section">
-          <div className="readme-container">            
-            <div className="readme-viewer">
-              {readmeLoading ? (
-                <div className="readme-loading">
-                  <div className="loading-spinner"></div>
-                  <p>Loading README...</p>
-                </div>
-              ) : readmeError ? (
-                <div className="readme-error">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="12"></line>
-                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                  </svg>
-                  <p>{readmeError}</p>
-                  <button 
-                    className="retry-btn"
-                    onClick={fetchReadme}
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : (
-                <div 
-                  className="readme-content" 
-                  dangerouslySetInnerHTML={{ __html: readme }}
-                />
-              )}
-            </div>
-          </div>
-        </div>
 
         {/* Animated Bottom Pattern */}
         <div className="bottom-pattern">
@@ -1051,6 +1115,7 @@ const About = () => {
 
         {/* Digital Clock */}
         <div className="digital-clock-container">
+
           <div className="clock-container">
             <div className="clock-col">
               <p className="clock-hours clock-timer"></p>
@@ -1074,6 +1139,7 @@ const About = () => {
             })} IST</span>
           </div>
         </div>
+
         
         {/* Edit Mode Indicator */}
         {editMode && (
@@ -1089,4 +1155,4 @@ const About = () => {
   );
 };
 
-export default About;
+export default Homepage;

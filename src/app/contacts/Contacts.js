@@ -1,22 +1,19 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import './Homepage.css';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import CommandLine from '../../components/CommandLine';
+import '../homepage/Homepage.css';
 import './Contacts.css';
-import Lanyard from './Lanyard.js';
-import LoadingOverlay from './LoadingOverlay';
-import FullScreenPrompt from './FullScreenPrompt';
+import Lanyard from '../../components/Lanyard.js';
+import LoadingOverlay from '../../components/LoadingOverlay';
+import FullScreenPrompt from '../../components/FullScreenPrompt';
+import { loadSplineScript } from '../../utils/splineLoader';
 import { 
   getContactsData, 
-  updateSocialBubbles, 
   subscribeToContactsData 
-} from '../firebase/firestoreService';
-import ChatBox from './ChatBox';
+} from '../../firebase/firestoreService';
+import ChatBox from '../../components/ChatBox';
 
 const Contacts = () => {
-  const navigate = useNavigate();
 
-  const [commandInput, setCommandInput] = useState('');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -112,268 +109,11 @@ const Contacts = () => {
   // Social links from Firestore (with icons added for display)
   const [socialLinks, setSocialLinks] = useState([]);
 
-  // Dropdown items for Windows Explorer style interface
-  const dropdownItems = [
-    { 
-      id: 1, 
-      name: 'Documents', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 11H4m15.5 5a.5.5 0 0 0 .5-.5V8a1 1 0 0 0-1-1h-3.75a1 1 0 0 1-.829-.44l-1.436-2.12a1 1 0 0 0-.828-.44H8a1 1 0 0 0-1 1M4 9v10a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1h-3.75a1 1 0 0 1-.829-.44L9.985 8.44A1 1 0 0 0 9.157 8H5a1 1 0 0 0-1 1Z"/>
-      </svg>, 
-      type: 'folder' 
-    },
-    { 
-      id: 2, 
-      name: 'Projects', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 9h6m-6 3h6m-6 3h6M6.996 9h.01m-.01 3h.01m-.01 3h.01M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/>
-      </svg>, 
-      type: 'folder' 
-    },
-    { 
-      id: 3, 
-      name: 'About', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 9h3m-3 3h3m-3 3h3m-6 1c-.306-.613-.933-1-1.618-1H7.618c-.685 0-1.312.387-1.618 1M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm7 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z"/>
-      </svg>, 
-      type: 'action' 
-    },
-    { 
-      id: 4, 
-      name: 'Home', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m4 12 8-8 8 8M6 10.5V19a1 1 0 0 0 1 1h3v-3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3h3a1 1 0 0 0 1-1v-8.5"/>
-      </svg>, 
-      type: 'action' 
-    },
-  ];
-  
-  // Command templates for edit mode
-  const commandTemplates = [
-    { id: 'add', template: 'add [name] [link] [size] [color]', description: 'Add a new contact bubble' },
-    { id: 'edit', template: 'edit [name] [newname] [newlink] [size] [color]', description: 'Edit an existing contact' },
-    { id: 'move', template: 'move [name] [x] [y]', description: 'Move a bubble to new position' },
-    { id: 'resize', template: 'resize [name] [size]', description: 'Change bubble size' },
-    { id: 'color', template: 'color [name] [color]', description: 'Change bubble color' },
-    { id: 'remove', template: 'remove [name]', description: 'Remove a contact bubble' },
-    { id: 'exit', template: 'exit', description: 'Exit edit mode' },
-  ];
-  
-  const handleInputChange = (e) => {
-    setCommandInput(e.target.value);
-    setIsDropdownOpen(e.target.value.length > 0);
-  };
-  
-  const handleInputFocus = () => {
-    setIsDropdownOpen(true);
-  };
-  
-  const handleInputBlur = () => {
-    // Delay closing to allow clicking on dropdown items
-    setTimeout(() => setIsDropdownOpen(false), 150);
-  };
-
-  useEffect(() => {
-      const handleKeyPress = (event) => {
-        // Check if "/" is pressed and no input/textarea is currently focused
-        if (event.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
-          event.preventDefault();
-          const commandInput = document.querySelector('.command-input');
-          if (commandInput) {
-            commandInput.focus();
-          }
-        }
-      };
-  
-      // Add event listener to document
-      document.addEventListener('keydown', handleKeyPress);
-  
-      // Cleanup event listener
-      return () => {
-        document.removeEventListener('keydown', handleKeyPress);
-      };
-    }, []);
-  
-  const handleItemClick = (item) => {
-    if (editMode && typeof item === 'object' && 'template' in item) {
-      // This is a command template
-      setCommandInput(item.template);
-    } else {
-      // This is a regular folder/file item
-      setCommandInput(item.name);
-      console.log(`Selected: ${item.name}`);
-      
-      // Handle navigation based on the selected item
-      if (item.name === 'Documents') {
-        navigate('/documents');
-      } else if (item.name === 'Projects') {
-        navigate('/projects');
-      } else if (item.name === 'About') {
-        navigate('/about');
-      } else if (item.name === 'Home') {
-        navigate('/');
-      }
-    }
-    // Keep dropdown open for command templates in edit mode
-    if (!(editMode && typeof item === 'object' && 'template' in item)) {
-      setIsDropdownOpen(false);
-    }
-  };
-  
-  // Password handling and edit mode functionality
-  const handleCommandSubmit = (e) => {
-    if (e.key === 'Enter') {
-      const command = commandInput.toLowerCase().trim();
-      
-      // Navigation commands (available in both edit and normal mode)
-      if (command === 'home') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/');
-        return;
-      } else if (command === 'documents') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/documents');
-        return;
-      } else if (command === 'projects') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/projects');
-        return;
-      } else if (command === 'about') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/about');
-        return;
-      } else if (command === 'contacts' || command === 'contact') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        // Already on contacts page, just show message
-        showMessage('You are already on the Contacts page.');
-        return;
-      }
-      
-      // Single letter navigation shortcuts
-      else if (command === 'h') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/');
-        return;
-      } else if (command === 'd') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/documents');
-        return;
-      } else if (command === 'p') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/projects');
-        return;
-      } else if (command === 'a') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/about');
-        return;
-      } else if (command === 'c') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/contacts');
-        return;
-      }
-
-      if (command === 'edit') {
-        setShowPasswordModal(true);
-      } else if (command.match(/^edit\s+(.+)\.$/)) {
-        // Handle "edit [password]." format - password must end with a period
-        const matches = command.match(/^edit\s+(.+)\.$/);
-        const password = matches[1];
-        const correctPassword = 'ranbir195'; // Same password as in validatePassword
-        
-        if (password === correctPassword) {
-          setEditMode(true);
-          setCommandInput('');
-          setIsDropdownOpen(true);
-          showMessage("Edit mode activated!");
-        } else {
-          showMessage("Incorrect password. Access denied.");
-        }
-      } else if (editMode) {
-        // Process commands only available in edit mode
-        
-        // Command pattern: "add [name] [link] [size] [color]" - To add a new contact bubble
-        if (command.match(/^add\s+([^\s]+)\s+([^\s]+)(?:\s+(\d+))?(?:\s+(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}))?$/)) {
-          const matches = command.match(/^add\s+([^\s]+)\s+([^\s]+)(?:\s+(\d+))?(?:\s+(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}))?$/);
-          const name = matches[1];
-          const url = matches[2];
-          const size = matches[3] ? parseInt(matches[3]) : Math.floor(Math.random() * 40) + 60; // Random size between 60-100
-          const color = matches[4] || '#be00ff';
-          
-          handleAddSocial(name, url, size, color);
-        }
-        // Command pattern: "edit [name] [newname] [newlink] [size] [color]" - To edit an existing contact
-        else if (command.match(/^edit\s+([^\s]+)(?:\s+([^\s]+))?(?:\s+([^\s]+))?(?:\s+(\d+))?(?:\s+(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}))?$/)) {
-          const matches = command.match(/^edit\s+([^\s]+)(?:\s+([^\s]+))?(?:\s+([^\s]+))?(?:\s+(\d+))?(?:\s+(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}))?$/);
-          const oldName = matches[1];
-          const newName = matches[2] || oldName;
-          const newUrl = matches[3];
-          const size = matches[4] ? parseInt(matches[4]) : undefined;
-          const color = matches[5];
-          
-          const social = socialLinks.find(s => s.id === oldName);
-          if (social) {
-            handleEditSocial(oldName, newName, newUrl || social.url, size || social.size, color || social.color);
-          } else {
-            showMessage(`Contact "${oldName}" not found.`);
-          }
-        }
-        // Command pattern: "move [name] [x] [y]" - To move a bubble
-        else if (command.match(/^move\s+([^\s]+)\s+(\d+)\s+(\d+)$/)) {
-          const matches = command.match(/^move\s+([^\s]+)\s+(\d+)\s+(\d+)$/);
-          const name = matches[1];
-          const x = parseInt(matches[2]);
-          const y = parseInt(matches[3]);
-          
-          handleMoveBubble(name, x, y);
-        }
-        // Command pattern: "resize [name] [size]" - To resize a bubble
-        else if (command.match(/^resize\s+([^\s]+)\s+(\d+)$/)) {
-          const matches = command.match(/^resize\s+([^\s]+)\s+(\d+)$/);
-          const name = matches[1];
-          const size = parseInt(matches[2]);
-          
-          handleResizeBubble(name, size);
-        }
-        // Command pattern: "color [name] [color]" - To change bubble color
-        else if (command.match(/^color\s+([^\s]+)\s+(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})$/)) {
-          const matches = command.match(/^color\s+([^\s]+)\s+(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})$/);
-          const name = matches[1];
-          const color = matches[2];
-          
-          handleColorBubble(name, color);
-        }
-        // Command pattern: "remove [name]" - To remove a contact bubble
-        else if (command.match(/^remove\s+([^\s]+)$/)) {
-          const matches = command.match(/^remove\s+([^\s]+)$/);
-          const name = matches[1];
-          
-          const social = socialLinks.find(s => s.id === name);
-          if (social) {
-            handleRemoveSocial(social.id);
-          } else {
-            showMessage(`Contact "${name}" not found.`);
-          }
-        }
-        // Exit edit mode command
-        else if (command === 'exit') {
-          handleExitEditMode();
-        }
-      }
-      
-      // Clear command input after processing
-      setCommandInput('');
-      setIsDropdownOpen(false);
-    }
+  // Show command message temporarily
+  const showMessage = (message) => {
+    setCommandMessage(message);
+    setShowCommandMessage(true);
+    setTimeout(() => setShowCommandMessage(false), 3000);
   };
   
   const validatePassword = (e) => {
@@ -385,168 +125,29 @@ const Contacts = () => {
       setShowPasswordModal(false);
       setPasswordInput('');
       setPasswordError('');
-      setCommandInput(''); // Clear the command input
-      // Show the dropdown with command templates
-      setIsDropdownOpen(true);
     } else {
       setPasswordError('Incorrect password. Please try again.');
     }
   };
   
-  // Social link management functions
-  const handleAddSocial = async (name, url, size = 75, color = '#be00ff') => {
-    // Ensure URL has proper protocol
-    const validUrl = url.startsWith('http') ? url : `https://${url}`;
-    
-    // Generate random position that doesn't overlap
-    const getRandomPosition = () => {
-      let attempts = 0;
-      let position = { x: 0, y: 0 };
-      
-      while (attempts < 10) {
-        const x = Math.floor(Math.random() * 80) + 10; // 10-90% of container width
-        const y = Math.floor(Math.random() * 70) + 15; // 15-85% of container height
-        
-        // Check if position overlaps with existing bubbles
-        const hasOverlap = socialLinks.some(s => 
-          Math.abs(s.x - x) < 15 && Math.abs(s.y - y) < 15
-        );
-        
-        if (!hasOverlap) {
-          position = { x, y };
-          break;
-        }
-        
-        attempts++;
-      }
-      
-      // If no non-overlapping position found after 10 attempts, use the last generated position
-      if (attempts === 10) {
-        position = {
-          x: Math.floor(Math.random() * 80) + 10,
-          y: Math.floor(Math.random() * 70) + 15
-        };
-      }
-      
-      return position;
+  // AI Context for CommandLine
+  const aiContext = useMemo(() => {
+    return {
+      currentPage: 'contacts',
+      contactData: contactsData,
+      socialLinks: socialLinks,
+      pages: ['home', 'projects', 'documents', 'about', 'contacts']
     };
-    
-    const position = getRandomPosition();
-    
-    const newSocial = {
-      id: name.toLowerCase(),
-      url: validUrl,
-      size: Math.min(Math.max(size, 40), 120), // Ensure size is between 40-120
-      color: color,
-      x: position.x,
-      y: position.y
-    };
-    
-    const updatedSocialLinks = [...socialLinks, { ...newSocial, icon: getDefaultIcon(name) }];
-    setSocialLinks(updatedSocialLinks);
-    
-    // Save to Firestore
-    await saveSocialBubbles(updatedSocialLinks);
-    showMessage(`Contact "${name}" added successfully!`);
-  };
+  }, [contactsData, socialLinks]);
   
-  const handleEditSocial = async (id, newName, newUrl, size, color) => {
-    const validUrl = newUrl.startsWith('http') ? newUrl : `https://${newUrl}`;
-    
-    const updatedSocialLinks = socialLinks.map(social =>
-      social.id === id
-        ? { 
-            ...social, 
-            id: newName.toLowerCase(), 
-            url: validUrl,
-            size: size ? Math.min(Math.max(size, 40), 120) : social.size,
-            color: color || social.color
-          }
-        : social
-    );
-    
-    setSocialLinks(updatedSocialLinks);
-    
-    // Save to Firestore
-    await saveSocialBubbles(updatedSocialLinks);
-    showMessage(`Contact updated successfully!`);
-  };
-  
-  const handleMoveBubble = async (name, x, y) => {
-    const updatedSocialLinks = socialLinks.map(social =>
-      social.id === name
-        ? { 
-            ...social, 
-            x: Math.min(Math.max(x, 0), 100), // Ensure x is between 0-100%
-            y: Math.min(Math.max(y, 0), 100)  // Ensure y is between 0-100%
-          }
-        : social
-    );
-    
-    setSocialLinks(updatedSocialLinks);
-    
-    // Save to Firestore
-    await saveSocialBubbles(updatedSocialLinks);
-    showMessage(`Moved "${name}" to position (${x}, ${y})`);
-  };
-  
-  const handleResizeBubble = async (name, size) => {
-    const updatedSocialLinks = socialLinks.map(social =>
-      social.id === name
-        ? { 
-            ...social, 
-            size: Math.min(Math.max(size, 40), 120) // Ensure size is between 40-120
-          }
-        : social
-    );
-    
-    setSocialLinks(updatedSocialLinks);
-    
-    // Save to Firestore
-    await saveSocialBubbles(updatedSocialLinks);
-    showMessage(`Resized "${name}" to ${size}px`);
-  };
-  
-  const handleColorBubble = async (name, color) => {
-    const updatedSocialLinks = socialLinks.map(social =>
-      social.id === name
-        ? { ...social, color: color }
-        : social
-    );
-    
-    setSocialLinks(updatedSocialLinks);
-    
-    // Save to Firestore
-    await saveSocialBubbles(updatedSocialLinks);
-    showMessage(`Changed "${name}" color to ${color}`);
-  };
-  
-  const handleRemoveSocial = async (id) => {
-    const socialToRemove = socialLinks.find(s => s.id === id);
-    if (socialToRemove && window.confirm(`Are you sure you want to remove "${id}" contact?`)) {
-      const updatedSocialLinks = socialLinks.filter(social => social.id !== id);
-      setSocialLinks(updatedSocialLinks);
-      
-      // Save to Firestore
-      await saveSocialBubbles(updatedSocialLinks);
-      showMessage(`Contact "${id}" removed successfully!`);
-    }
-  };
+  // Handle AI responses
+  const handleAIResponse = useCallback((response) => {
+    console.log('🤖 AI Response on Contacts:', response);
+  }, []);
   
   const handleExitEditMode = () => {
     setEditMode(false);
     showMessage("Exited edit mode.");
-  };
-  
-  // Show a temporary command result message
-  const showMessage = (message) => {
-    setCommandMessage(message);
-    setShowCommandMessage(true);
-    
-    // Auto-hide after 3 seconds
-    setTimeout(() => {
-      setShowCommandMessage(false);
-    }, 3000);
   };
   
   // Get default icon for new social links
@@ -805,24 +406,8 @@ const Contacts = () => {
       }
     }
     
-    // Load the latest Spline viewer script
-    const script = document.createElement('script');
-    script.type = 'module';
-    script.src = 'https://unpkg.com/@splinetool/viewer@latest/build/spline-viewer.js';
-    script.onload = () => {
-      console.log('Spline viewer script loaded successfully');
-    };
-    script.onerror = () => {
-      console.warn('Failed to load Spline viewer script');
-    };
-    document.head.appendChild(script);
-
-    return () => {
-      // Cleanup script when component unmounts
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
-    };
+    // Load Spline viewer script using centralized loader
+    loadSplineScript();
   }, []);
   
   // Load contacts data from Firestore
@@ -846,19 +431,6 @@ const Contacts = () => {
       showMessage('Error loading contacts data from Firestore');
     }
   }, []);
-
-  // Save social bubbles to Firestore
-  const saveSocialBubbles = async (bubbles) => {
-    try {
-      // Remove icons before saving to Firestore
-      const bubblesForFirestore = bubbles.map(({ icon, ...bubble }) => bubble);
-      await updateSocialBubbles(bubblesForFirestore);
-      showMessage('Social bubbles saved to Firestore successfully!');
-    } catch (error) {
-      console.error('Error saving social bubbles:', error);
-      showMessage('Error saving social bubbles to Firestore');
-    }
-  };
 
   // Load data on component mount and set up real-time listener
   useEffect(() => {
@@ -901,80 +473,13 @@ const Contacts = () => {
       <div className={`main-content ${showLoadingOverlay ? 'loading' : 'loaded'}`}>
         {/* Spline 3D Background */}
         <div className="spline-background">
-        {/* Command Line Interface */}
         <Lanyard position={[2.5, 2, 20]} gravity={[0, -40, 0]} />
-        <div className="command-line-container">
-          <div className="glass-panel">
-            <form id="command-form" autoComplete="off" onSubmit={(e) => e.preventDefault()}>
-              <div className="command-input-wrapper">
-                <span className="prompt-symbol">{editMode ? '🔓' : '$'}</span>
-                <input
-                  type="text"
-                  className="command-input"
-                  placeholder={editMode ? "Type a command or click a template below..." : "Search, navigate, or run a command..."}
-                  value={commandInput}
-                  onChange={handleInputChange}
-                  onFocus={handleInputFocus}
-                  onBlur={handleInputBlur}
-                  onKeyDown={handleCommandSubmit}
-                  autoComplete="off"
-                />
-                <span className={`dropdown-indicator ${isDropdownOpen ? 'open' : 'closed'}`}>
-                  {isDropdownOpen ? (
-                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" strokeWidth="2">
-                      <polyline points="6,9 12,15 18,9"></polyline>
-                    </svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" strokeWidth="2">
-                      <polyline points="15,18 9,12 15,6"></polyline>
-                    </svg>
-                  )}
-                </span>
-              </div>
-            </form>
-            
-            {isDropdownOpen && (
-              <div className="dropdown-panel">
-                <div className="explorer-grid">
-                  {editMode ? 
-                    // Command templates in edit mode
-                    commandTemplates.map((cmd) => (
-                      <div 
-                        key={cmd.id} 
-                        className="explorer-item command-template"
-                        onClick={() => handleItemClick(cmd)}
-                      >
-                        <div className="item-icon">{
-                          cmd.id === 'exit' ? '🚪' : 
-                          cmd.id === 'add' ? '🔮' : 
-                          cmd.id === 'edit' ? '✏️' : 
-                          cmd.id === 'move' ? '🎯' : 
-                          cmd.id === 'resize' ? '📏' : 
-                          cmd.id === 'color' ? '🎨' : 
-                          cmd.id === 'remove' ? '❌' : '📝'
-                        }</div>
-                        <div className="item-name">{cmd.id}</div>
-                        <div className="item-description">{cmd.description}</div>
-                      </div>
-                    ))
-                    :
-                    // Regular items when not in edit mode
-                    dropdownItems.map((item) => (
-                      <div 
-                        key={item.id} 
-                        className="explorer-item"
-                        onClick={() => handleItemClick(item)}
-                      >
-                        <div className="item-icon">{item.icon}</div>
-                        <div className="item-name">{item.name}</div>
-                      </div>
-                    ))
-                  }
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        
+        {/* Command Line Interface */}
+        <CommandLine 
+          aiContext={aiContext}
+          onAIResponse={handleAIResponse}
+        />
         
         {/* Contact Navigation - Vertical Column */}
         <div className="social-links-container">

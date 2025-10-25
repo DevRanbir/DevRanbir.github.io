@@ -1,22 +1,21 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import './Homepage.css';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import CommandLine from '../../components/CommandLine';
+import '../homepage/Homepage.css';
 import './DocumentsStyles.css';
-import Lanyard from './Lanyard';
-import LoadingOverlay from './LoadingOverlay';
-import FullScreenPrompt from './FullScreenPrompt';
+import Lanyard from '../../components/Lanyard';
+import LoadingOverlay from '../../components/LoadingOverlay';
+import FullScreenPrompt from '../../components/FullScreenPrompt';
+import { loadSplineScript } from '../../utils/splineLoader';
 
 // Firebase imports
 import { 
   getDocumentsData,
+  getHomepageData,
   updateDocuments,
   subscribeToDocumentsData
-} from '../firebase/firestoreService';
+} from '../../firebase/firestoreService';
 
 const Documents = () => {
-  const navigate = useNavigate();
-  const [commandInput, setCommandInput] = useState('');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -38,6 +37,8 @@ const Documents = () => {
   const [selectedFilter, setSelectedFilter] = useState('all'); // New state for filtering
   const [viewMode, setViewMode] = useState('blocks'); // New state for view mode: 'blocks' or 'list'
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
+  const [socialLinks, setSocialLinks] = useState([]);
+  const [skills, setSkills] = useState([]);
 
   // Memoized callback to prevent useEffect loops in LoadingOverlay
   const handleLoadingComplete = useCallback(() => {
@@ -45,62 +46,14 @@ const Documents = () => {
     setShowLoadingOverlay(false);
   }, []);
 
-  // Dummy dropdown items for Windows Explorer style interface
-  const dropdownItems = [
-    { 
-      id: 2, 
-      name: 'Projects', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 9h6m-6 3h6m-6 3h6M6.996 9h.01m-.01 3h.01m-.01 3h.01M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/>
-      </svg>, 
-      type: 'folder' 
-    },
-    { 
-      id: 5, 
-      name: 'About', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 9h3m-3 3h3m-3 3h3m-6 1c-.306-.613-.933-1-1.618-1H7.618c-.685 0-1.312.387-1.618 1M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm7 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z"/>
-      </svg>, 
-      type: 'action' 
-    },
-    { 
-      id: 6, 
-      name: 'Contact', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.079 6.839a3 3 0 0 0-4.255.1M13 20h1.083A3.916 3.916 0 0 0 18 16.083V9A6 6 0 1 0 6 9v7m7 4v-1a1 1 0 0 0-1-1h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1Zm-7-4v-6H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1Zm12-6h1a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-1v-6Z"/>
-      </svg>, 
-      type: 'action' 
-    },
-    { 
-      id: 7, 
-      name: 'Home', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m4 12 8-8 8 8M6 10.5V19a1 1 0 0 0 1 1h3v-3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3h3a1 1 0 0 0 1-1v-8.5"/>
-      </svg>, 
-      type: 'action' 
-    },
-  ];
-
-  // Command templates for edit mode specific to Documents
-  const commandTemplates = [
-    { id: 'add', template: 'add [type] [name] [url] [description]', description: 'Add a new document (video/image/pdf/text/ppt)' },
-    { id: 'batch-add', template: 'batch-add [type1] [name1] [url1] [desc1] | [type2] [name2] [url2] [desc2] | ...', description: 'Add multiple documents at once' },
-    { id: 'edit', template: 'edit [oldtype] [oldname] - [newtype] [newname] [newdesc]', description: 'Edit document type/name/description' },
-    { id: 'remove', template: 'remove [name]', description: 'Remove a document' },
-    { id: 'batch-remove', template: 'batch-remove [name1] [name2] [name3] ...', description: 'Remove multiple documents at once' },
-    { id: 'filter', template: 'filter [type]', description: 'Filter documents by type (all/video/image/pdf/text/ppt)' },
-    { id: 'view', template: 'view [blocks|list]', description: 'Toggle between blocks and list view' },
-    { id: 'exit', template: 'exit', description: 'Exit edit mode' },
-  ];
-  
-  // Allowed document types
-  const allowedTypes = [
+  // Allowed document types (wrapped in useMemo to avoid re-creation on every render)
+  const allowedTypes = useMemo(() => [
     { value: 'video', label: 'Video', icon: '🎬' },
     { value: 'image', label: 'Image', icon: '🖼️' },
     { value: 'pdf', label: 'PDF', icon: '📄' },
     { value: 'text', label: 'Text', icon: '📝' },
     { value: 'ppt', label: 'PowerPoint', icon: '📊' }
-  ];
+  ], []);
   
   // Filter links for document types (similar to social media container)
   const filterLinks = [
@@ -176,38 +129,152 @@ const Documents = () => {
     }
   ];
 
+  // Function to get documents based on selected filter
+  const getDocumentsByFilter = useCallback(() => {
+    if (selectedFilter === 'all') {
+      return documents;
+    }
+    return documents.filter(doc => doc.type === selectedFilter);
+  }, [documents, selectedFilter]);
+
+  // AI Context for CommandLine
+  const aiContext = useMemo(() => {
+    const filteredDocs = getDocumentsByFilter();
+    const allDocs = documents;
+    
+    // Count documents by type
+    const docCounts = allowedTypes.reduce((acc, type) => {
+      acc[type.value] = allDocs.filter(doc => doc.type === type.value).length;
+      return acc;
+    }, {});
+    
+    // Create detailed document descriptions for AI
+    const documentDescriptions = filteredDocs.length > 0 
+      ? filteredDocs.map((doc, index) => 
+          `${index + 1}. "${doc.name}" (Type: ${doc.type.toUpperCase()}) - ${doc.description || 'No description'}`
+        ).join('\n')
+      : 'No documents match the current filter';
+    
+    return {
+      currentPage: 'documents',
+      documents: filteredDocs.map(doc => ({
+        name: doc.name,
+        type: doc.type,
+        description: doc.description,
+        url: doc.url,
+        dateAdded: doc.dateAdded,
+        size: doc.size || 'Unknown'
+      })),
+      allDocuments: allDocs.map(doc => ({
+        name: doc.name,
+        type: doc.type,
+        description: doc.description
+      })),
+      documentDescriptions: documentDescriptions,
+      documentTypes: allowedTypes.map(t => ({
+        type: t.value,
+        label: t.label,
+        count: docCounts[t.value] || 0
+      })),
+      totalDocuments: allDocs.length,
+      filteredCount: filteredDocs.length,
+      selectedFilter: selectedFilter,
+      viewMode: viewMode,
+      skills: skills,
+      socialLinks: socialLinks,
+      pages: ['home', 'projects', 'documents', 'about', 'contacts'],
+      allowedTypes: allowedTypes
+    };
+  }, [documents, selectedFilter, viewMode, skills, socialLinks, getDocumentsByFilter, allowedTypes]);
+  
+  // Handle search/filter from command line
+  const handleCommandSearch = useCallback((query) => {
+    if (!query || query.trim() === '') {
+      setSelectedFilter('all');
+      return;
+    }
+    
+    const searchTerm = query.toLowerCase().trim();
+    
+    // Create alias mappings for common variations
+    const typeAliases = {
+      'pdfs': 'pdf',
+      'images': 'image',
+      'pictures': 'image',
+      'photos': 'image',
+      'pics': 'image',
+      'videos': 'video',
+      'movies': 'video',
+      'words': 'word',
+      'docs': 'word',
+      'documents': 'word',
+      'powerpoint': 'ppt',
+      'powerpoints': 'ppt',
+      'ppts': 'ppt',
+      'presentations': 'ppt',
+      'slides': 'ppt',
+      'texts': 'text',
+      'text files': 'text',
+      'txts': 'text'
+    };
+    
+    // Check aliases first
+    const aliasedType = typeAliases[searchTerm];
+    if (aliasedType) {
+      setSelectedFilter(aliasedType);
+      setCurrentPage(0);
+      console.log('✅ Matched alias:', searchTerm, '→', aliasedType);
+      return;
+    }
+    
+    // Check if query matches a document type (exact match or label contains)
+    const matchingType = allowedTypes.find(type => 
+      type.value.toLowerCase() === searchTerm || 
+      type.label.toLowerCase().includes(searchTerm) ||
+      searchTerm.includes(type.value.toLowerCase()) ||
+      searchTerm.includes(type.label.toLowerCase())
+    );
+    
+    if (matchingType) {
+      setSelectedFilter(matchingType.value);
+      setCurrentPage(0);
+      console.log('✅ Matched document type:', matchingType.value);
+    } else {
+      console.log('❌ No matching document type for:', searchTerm);
+    }
+  }, [allowedTypes]);
+  
+  // Handle AI responses
+  const handleAIResponse = useCallback((response) => {
+    console.log('🤖 AI Response on Documents:', response);
+    
+    // Handle specific actions
+    if (response.hasAction) {
+      switch (response.action) {
+        case 'filter':
+          // AI wants to filter documents by type
+          console.log('🎯 Filtering documents by:', response.target);
+          handleCommandSearch(response.target);
+          break;
+        case 'clear':
+        case 'reset':
+          // AI wants to clear filters
+          console.log('🔄 Clearing document filters');
+          setSelectedFilter('all');
+          setCurrentPage(0);
+          break;
+        default:
+          break;
+      }
+    }
+  }, [handleCommandSearch]);
+
   // Handle view mode toggle
   const toggleViewMode = () => {
     const newViewMode = viewMode === 'blocks' ? 'list' : 'blocks';
     setViewMode(newViewMode);
     setCurrentPage(0); // Reset to first page when changing view
     showMessage(`Switched to ${newViewMode} view`);
-  };
-
-  
-  const handleInputChange = (e) => {
-    setCommandInput(e.target.value);
-    setIsDropdownOpen(e.target.value.length > 0);
-  };
-  
-  // Function to filter documents based on search query
-  const getFilteredDocuments = () => {
-    const query = commandInput.toLowerCase().trim();
-    if (!query || editMode) return [];
-    
-    return documents.filter(doc => 
-      doc.name.toLowerCase().includes(query) || 
-      (doc.description && doc.description.toLowerCase().includes(query)) ||
-      doc.type.toLowerCase().includes(query)
-    ).slice(0, 5); // Limit to 5 results
-  };
-  
-  // Function to get documents based on selected filter
-  const getDocumentsByFilter = () => {
-    if (selectedFilter === 'all') {
-      return documents;
-    }
-    return documents.filter(doc => doc.type === selectedFilter);
   };
   
   // Handle filter selection
@@ -220,61 +287,7 @@ const Documents = () => {
     const filteredCount = filterType === 'all' ? documents.length : documents.filter(d => d.type === filterType).length;
     showMessage(`Showing ${filteredCount} ${filterLabel.toLowerCase()}`);
   };
-  
-  const handleInputFocus = () => {
-    setIsDropdownOpen(true);
-  };
-  
-  const handleInputBlur = () => {
-    // Delay closing to allow clicking on dropdown items
-    setTimeout(() => setIsDropdownOpen(false), 150);
-  };
-  
-  const handleItemClick = (item) => {
-    if (editMode && typeof item === 'object' && 'template' in item) {
-      // This is a command template
-      setCommandInput(item.template);
-    } else if (typeof item === 'object' && 'id' in item && 'name' in item && 'type' in item && 'url' in item) {
-      // This is a document search result (must have a url property)
-      window.open(item.url, '_blank');
-      setCommandInput('');
-      setIsDropdownOpen(false);
-      return;
-    } else {
-      // This is a regular folder/file item
-      console.log(`Selected: ${item.name}`);
-      
-      // Handle navigation
-      if (item.name === 'Home') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/');
-        return;
-      } else if (item.name === 'Projects') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/projects');
-        return;
-      } else if (item.name === 'About') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/about');
-        return;
-      } else if (item.name === 'Contact') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/contacts');
-        return;
-      }
-      
-      setCommandInput(item.name);
-    }
-    // Keep dropdown open for command templates in edit mode
-    if (!(editMode && typeof item === 'object' && 'template' in item)) {
-      setIsDropdownOpen(false);
-    }
-  };
-  
+
   // Helper function to ensure URL has proper protocol
   const ensureValidUrl = (url) => {
     // If URL doesn't start with http:// or https://, add https://
@@ -282,228 +295,6 @@ const Documents = () => {
       return `https://${url}`;
     }
     return url;
-  };
-
-  useEffect(() => {
-      const handleKeyPress = (event) => {
-        // Check if "/" is pressed and no input/textarea is currently focused
-        if (event.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
-          event.preventDefault();
-          const commandInput = document.querySelector('.command-input');
-          if (commandInput) {
-            commandInput.focus();
-          }
-        }
-      };
-  
-      // Add event listener to document
-      document.addEventListener('keydown', handleKeyPress);
-  
-      // Cleanup event listener
-      return () => {
-        document.removeEventListener('keydown', handleKeyPress);
-      };
-    }, []);
-  
-  // Password handling and edit mode functionality
-  const handleCommandSubmit = (e) => {
-    if (e.key === 'Enter') {
-      const command = commandInput.toLowerCase().trim();
-      
-      // Navigation commands (available in both edit and normal mode)
-      if (command === 'home') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/');
-        return;
-      } else if (command === 'projects') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/projects');
-        return;
-      } else if (command === 'documents') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        // Already on documents page, just show message
-        showMessage('You are already on the Documents page.');
-        return;
-      }
-
-      // Single letter navigation shortcuts
-      else if (command === 'h') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/');
-        return;
-      } else if (command === 'd') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/documents');
-        return;
-      } else if (command === 'p') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/projects');
-        return;
-      } else if (command === 'a') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/about');
-        return;
-      } else if (command === 'c') {
-        setCommandInput('');
-        setIsDropdownOpen(false);
-        navigate('/contacts');
-        return;
-      }
-      
-      if (command === 'edit') {
-        setShowPasswordModal(true);
-      } else if (command.match(/^edit\s+(.+)\.$/)) {
-        // Handle "edit [password]." format - password must end with a period
-        const matches = command.match(/^edit\s+(.+)\.$/);
-        const password = matches[1];
-        const correctPassword = 'ranbir195'; // Same password as in validatePassword
-        
-        if (password === correctPassword) {
-          setEditMode(true);
-          setCommandInput('');
-          setIsDropdownOpen(true);
-          showMessage("Edit mode activated!");
-        } else {
-          showMessage("Incorrect password. Access denied.");
-        }
-      } else if (editMode) {
-        // Process commands only available in edit mode
-        
-        // Command pattern: "add [type] [name] [url] [description]" - To add a new document
-        if (command.match(/^add\s+(video|image|pdf|text|ppt)\s+([^\s]+)\s+([^\s]+)(?:\s+(.*))?$/)) {
-          const matches = command.match(/^add\s+(video|image|pdf|text|ppt)\s+([^\s]+)\s+([^\s]+)(?:\s+(.*))?$/);
-          const type = matches[1];
-          const name = matches[2];
-          const url = matches[3];
-          const description = matches[4] || '';
-          
-          handleAddDocument(name, type, url, description);
-        }
-        // Command pattern: "batch-add [type1] [name1] [url1] [desc1] | [type2] [name2] [url2] [desc2] | ..." - To add multiple documents
-        else if (command.match(/^batch-add\s+(.+)$/)) {
-          const matches = command.match(/^batch-add\s+(.+)$/);
-          const documentsString = matches[1];
-          
-          // Split by | to get individual document entries
-          const documentEntries = documentsString.split('|').map(entry => entry.trim());
-          const documentsData = [];
-          
-          documentEntries.forEach(entry => {
-            const entryMatch = entry.match(/^(video|image|pdf|text|ppt)\s+([^\s]+)\s+([^\s]+)(?:\s+(.*))?$/);
-            if (entryMatch) {
-              documentsData.push({
-                type: entryMatch[1],
-                name: entryMatch[2],
-                url: entryMatch[3],
-                description: entryMatch[4] || ''
-              });
-            }
-          });
-          
-          if (documentsData.length > 0) {
-            handleBatchAddDocuments(documentsData);
-          } else {
-            showMessage("Invalid batch-add format. Use: batch-add type1 name1 url1 desc1 | type2 name2 url2 desc2");
-          }
-        }
-        // Command pattern: "edit [oldtype] [oldname] - [newtype] [newname] [newdesc]" - To edit an existing document
-        else if (command.match(/^edit\s+(video|image|pdf|text|ppt)\s+([^\s]+)\s+-\s+(video|image|pdf|text|ppt)\s+([^\s]+)(?:\s+(.*))?$/)) {
-          const matches = command.match(/^edit\s+(video|image|pdf|text|ppt)\s+([^\s]+)\s+-\s+(video|image|pdf|text|ppt)\s+([^\s]+)(?:\s+(.*))?$/);
-          const oldType = matches[1];
-          const oldName = matches[2];
-          const newType = matches[3];
-          const newName = matches[4];
-          const newDescription = matches[5] || '';
-          
-          // Find document by type and name
-          const doc = documents.find(d => d.type === oldType && d.name === oldName);
-          if (doc) {
-            handleEditDocument(doc.id, newName, newType, newDescription);
-          } else {
-            showMessage(`Document "${oldName}" of type "${oldType}" not found.`);
-          }
-        }
-        // Command pattern: "remove [name]" - To remove a document
-        else if (command.match(/^remove\s+(.+)$/)) {
-          const matches = command.match(/^remove\s+(.+)$/);
-          const name = matches[1];
-          
-          // Find document by name
-          const doc = documents.find(d => d.name === name);
-          if (doc) {
-            handleRemoveDocument(doc.id);
-          } else {
-            showMessage(`Document "${name}" not found.`);
-          }
-        }
-        // Command pattern: "batch-remove [name1] [name2] [name3] ..." - To remove multiple documents
-        else if (command.match(/^batch-remove\s+(.+)$/)) {
-          const matches = command.match(/^batch-remove\s+(.+)$/);
-          const namesString = matches[1];
-          
-          // Split by spaces to get individual names (assuming names don't contain spaces)
-          const names = namesString.split(/\s+/).filter(name => name.trim());
-          
-          if (names.length > 0) {
-            handleBatchRemoveDocuments(names);
-          } else {
-            showMessage("Invalid batch-remove format. Use: batch-remove name1 name2 name3");
-          }
-        }
-        // Exit edit mode command
-        else if (command === 'exit') {
-          handleExitEditMode();
-        }
-        // Filter command pattern: "filter [type]" - To filter documents by type
-        else if (command.match(/^filter\s+(all|video|image|pdf|text|ppt)$/)) {
-          const matches = command.match(/^filter\s+(all|video|image|pdf|text|ppt)$/);
-          const filterType = matches[1];
-          handleFilterClick(filterType);
-        }
-        // View command pattern: "view [blocks|list]" - To toggle view mode
-        else if (command.match(/^view\s+(blocks|list)$/)) {
-          const matches = command.match(/^view\s+(blocks|list)$/);
-          const requestedView = matches[1];
-          if (requestedView !== viewMode) {
-            setViewMode(requestedView);
-            setCurrentPage(0);
-            showMessage(`Switched to ${requestedView} view`);
-          } else {
-            showMessage(`Already in ${requestedView} view`);
-          }
-        }
-      } else {
-        // Commands available in normal mode
-        if (command.match(/^filter\s+(all|video|image|pdf|text|ppt)$/)) {
-          const matches = command.match(/^filter\s+(all|video|image|pdf|text|ppt)$/);
-          const filterType = matches[1];
-          handleFilterClick(filterType);
-        }
-        // View command in normal mode
-        else if (command.match(/^view\s+(blocks|list)$/)) {
-          const matches = command.match(/^view\s+(blocks|list)$/);
-          const requestedView = matches[1];
-          if (requestedView !== viewMode) {
-            setViewMode(requestedView);
-            setCurrentPage(0);
-            showMessage(`Switched to ${requestedView} view`);
-          } else {
-            showMessage(`Already in ${requestedView} view`);
-          }
-        }
-      }
-      
-      // Clear command input after processing
-      setCommandInput('');
-      setIsDropdownOpen(false);
-    }
   };
   
   const validatePassword = (e) => {
@@ -515,9 +306,6 @@ const Documents = () => {
       setShowPasswordModal(false);
       setPasswordInput('');
       setPasswordError('');
-      setCommandInput(''); // Clear the command input
-      // Show the dropdown with command templates
-      setIsDropdownOpen(true);
     } else {
       setPasswordError('Incorrect password. Please try again.');
     }
@@ -632,86 +420,6 @@ const Documents = () => {
     } catch (error) {
       console.error('Error removing document:', error);
       showMessage(`Error removing document: ${error.message}`);
-    }
-  };
-
-  // Batch operations
-  const handleBatchAddDocuments = async (documentsData) => {
-    try {
-      let addedCount = 0;
-      const updatedDocuments = [...documents];
-      
-      documentsData.forEach(({ type, name, url, description }) => {
-        if (type && name && url) {
-          const validUrl = ensureValidUrl(url);
-          const previewUrl = convertToPreviewUrl(validUrl);
-          const newId = Math.max(...updatedDocuments.map(doc => doc.id), 0) + 1 + addedCount;
-          
-          const newDocument = {
-            id: newId,
-            name: name,
-            type: type,
-            url: validUrl,
-            previewUrl: previewUrl,
-            description: description || '',
-            dateAdded: new Date().toISOString().split('T')[0]
-          };
-          
-          updatedDocuments.push(newDocument);
-          addedCount++;
-        }
-      });
-      
-      if (addedCount > 0) {
-        setDocuments(updatedDocuments);
-        
-        // Save to Firebase instead of localStorage
-        await updateDocuments(updatedDocuments);
-        showMessage(`Successfully added ${addedCount} document(s)!`);
-        
-        // Dispatch event to notify other components
-        window.dispatchEvent(new CustomEvent('documentsUpdated', { 
-          detail: { documents: updatedDocuments, timestamp: new Date().toISOString() } 
-        }));
-      } else {
-        showMessage("No valid documents to add. Check your format.");
-      }
-    } catch (error) {
-      console.error('Error batch adding documents:', error);
-      showMessage(`Error adding documents: ${error.message}`);
-    }
-  };
-
-  const handleBatchRemoveDocuments = async (names) => {
-    try {
-      let removedCount = 0;
-      let updatedDocuments = [...documents];
-      
-      names.forEach(name => {
-        const docIndex = updatedDocuments.findIndex(d => d.name === name.trim());
-        if (docIndex !== -1) {
-          updatedDocuments = updatedDocuments.filter(d => d.name !== name.trim());
-          removedCount++;
-        }
-      });
-      
-      if (removedCount > 0) {
-        setDocuments(updatedDocuments);
-        
-        // Save to Firebase instead of localStorage
-        await updateDocuments(updatedDocuments);
-        showMessage(`Successfully removed ${removedCount} document(s)!`);
-        
-        // Dispatch event to notify other components
-        window.dispatchEvent(new CustomEvent('documentsUpdated', { 
-          detail: { documents: updatedDocuments, timestamp: new Date().toISOString() } 
-        }));
-      } else {
-        showMessage("No matching documents found to remove.");
-      }
-    } catch (error) {
-      console.error('Error batch removing documents:', error);
-      showMessage(`Error removing documents: ${error.message}`);
     }
   };
   
@@ -923,6 +631,34 @@ const Documents = () => {
 
     loadDocumentsFromFirebase();
 
+    // Fetch skills and social links from homepage data
+    const fetchSkillsAndLinks = async () => {
+      try {
+        const data = await getHomepageData();
+        if (data) {
+          // Extract skills from homepage data
+          if (data.skills) {
+            setSkills(data.skills);
+          } else if (data.cardData) {
+            // Extract from Skills card if available
+            const skillsCard = data.cardData.find(card => card.title === 'Skills');
+            if (skillsCard && skillsCard.labels) {
+              setSkills(skillsCard.labels);
+            }
+          }
+          
+          // Set social links
+          if (data.socialLinks) {
+            setSocialLinks(data.socialLinks);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching skills and social links:', error);
+      }
+    };
+    
+    fetchSkillsAndLinks();
+
     // Set up real-time listener for Firebase updates
     const unsubscribe = subscribeToDocumentsData((data) => {
       if (data.documents) {
@@ -930,37 +666,10 @@ const Documents = () => {
       }
     });
     
-    // Load the latest Spline viewer script with enhanced error handling
-    const script = document.createElement('script');
-    script.type = 'module';
-    script.src = 'https://unpkg.com/@splinetool/viewer@latest/build/spline-viewer.js';
-    script.onload = () => {
-      // Add a small delay to ensure the script is fully loaded
-      setTimeout(() => {
-        const splineViewer = document.querySelector('spline-viewer');
-        if (splineViewer) {
-          // Add error event listener to handle WebGL errors
-          splineViewer.addEventListener('error', (e) => {
-            console.warn('Spline viewer error:', e.detail);
-          });
-          
-          // Add load event listener
-          splineViewer.addEventListener('load', () => {
-            console.log('Spline scene loaded successfully');
-          });
-        }
-      }, 100);
-    };
-    script.onerror = () => {
-      console.warn('Failed to load Spline viewer script, falling back to basic version');
-    };
-    document.head.appendChild(script);
+    // Load Spline viewer script using centralized loader
+    loadSplineScript();
 
     return () => {
-      // Cleanup script when component unmounts
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
       // Cleanup Firebase subscription
       unsubscribe();
     };
@@ -1161,116 +870,14 @@ const Documents = () => {
       <div className={`main-content ${showLoadingOverlay ? 'loading' : 'loaded'}`}>
         {/* Spline 3D Background */}
         <div className="spline-background">
-        {/* Command Line Interface */}
         <Lanyard position={[2.5, 2, 20]} gravity={[0, -40, 0]} />
-        <div className="command-line-container">
-          <div className="glass-panel">
-            <form id="command-form" autoComplete="off" onSubmit={(e) => e.preventDefault()}>
-              <div className="command-input-wrapper">
-                <span className="prompt-symbol">{editMode ? '🔓' : '$'}</span>
-                <input
-                  type="text"
-                  className="command-input"
-                  placeholder={editMode ? "Type a command or click a template below..." : "Search, navigate, or run a command..."}
-                  value={commandInput}
-                  onChange={handleInputChange}
-                  onFocus={handleInputFocus}
-                  onBlur={handleInputBlur}
-                  onKeyDown={handleCommandSubmit}
-                  autoComplete="off"
-                />
-                <span className={`dropdown-indicator ${isDropdownOpen ? 'open' : 'closed'}`}>
-                  {isDropdownOpen ? (
-                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" strokeWidth="2">
-                      <polyline points="6,9 12,15 18,9"></polyline>
-                    </svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" strokeWidth="2">
-                      <polyline points="15,18 9,12 15,6"></polyline>
-                    </svg>
-                  )}
-                </span>
-              </div>
-            </form>
-            
-            {isDropdownOpen && (
-              <div className="dropdown-panel">
-                <div className="explorer-grid">
-                  {editMode ? 
-                    // Command templates in edit mode
-                    commandTemplates.map((cmd) => (
-                      <div 
-                        key={cmd.id} 
-                        className="explorer-item command-template"
-                        onClick={() => handleItemClick(cmd)}
-                      >
-                        <div className="item-icon">{
-                          cmd.id === 'exit' ? '🚪' : 
-                          cmd.id === 'add' ? '➕' : 
-                          cmd.id === 'batch-add' ? '📝' :
-                          cmd.id === 'edit' ? '✏️' : 
-                          cmd.id === 'remove' ? '❌' : 
-                          cmd.id === 'batch-remove' ? '🗂️' :
-                          cmd.id === 'filter' ? '🔍' :
-                          cmd.id === 'view' ? '👁️' :
-                          '📝'
-                        }</div>
-                        <div className="item-name">{cmd.id}</div>
-                        <div className="item-description">{cmd.description}</div>
-                      </div>
-                    ))
-                    :
-                    // Document search results and regular items
-                    <>
-                      {getFilteredDocuments().length > 0 && (
-                        <>
-                          <div className="search-section-header">
-                            <span>📄 Documents ({getFilteredDocuments().length} found)</span>
-                          </div>
-                          {getFilteredDocuments().map((doc) => (
-                            <div 
-                              key={`doc-${doc.id}`} 
-                              className="explorer-item document-search-result"
-                              onClick={() => handleItemClick(doc)}
-                              title={`${doc.name} - Click to open`}
-                            >
-                              <div className="item-icon">
-                                {doc.type === 'video' ? '🎬' : 
-                                 doc.type === 'image' ? '🖼️' : 
-                                 doc.type === 'pdf' ? '📄' : 
-                                 doc.type === 'text' ? '📝' : 
-                                 doc.type === 'ppt' ? '📊' : ' '}
-                              </div>
-                              <div className="item-details">
-                                <div className="item-name">{doc.name}</div>
-                                {doc.description && (
-                                  <div className="item-description">{doc.description.substring(0, 40)}...</div>
-                                )}
-                                <div className="item-meta">{doc.type.toUpperCase()}</div>
-                              </div>
-                            </div>
-                          ))}
-                          <div className="search-separator"></div>
-                        </>
-                      )}
-                      {/* Regular navigation items */}
-                      {dropdownItems.map((item) => (
-                        <div 
-                          key={item.id} 
-                          className="explorer-item"
-                          onClick={() => handleItemClick(item)}
-                        >
-                          <div className="item-icon">{item.icon}</div>
-                          <div className="item-name">{item.name}</div>
-                        </div>
-                      ))}
-                    </>
-                  }
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        
+        {/* Command Line Interface */}
+        <CommandLine 
+          aiContext={aiContext}
+          onAIResponse={handleAIResponse}
+          onSearchChange={handleCommandSearch}
+        />
         
         {/* Document Type Filter Links - Vertical Column */}
         <div className="social-links-container">

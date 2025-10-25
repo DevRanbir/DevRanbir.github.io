@@ -4,7 +4,7 @@ import './LoadingOverlay.css';
 
 const LoadingOverlay = ({ 
   duration = 3000, 
-  lottieUrl = "https://lottie.host/c6f23362-0719-46e8-bca1-c05bde83164a/APralmuLui.lottie",
+  lottieUrl = "https://lottie.host/84bf1caa-4c33-4817-bb77-89d02ec48363/k6ekHMqGII.lottie",
   fadeOutDuration = 500,
   onComplete
 }) => {
@@ -55,8 +55,8 @@ const LoadingOverlay = ({
           loop
           autoplay
           style={{
-            width: '300px',
-            height: '300px',
+            width: '400px',
+            height: '400px',
           }}
         />
       </div>

@@ -529,16 +529,9 @@ const MagicBento = ({
         navigate(link);
       }
     } else if (!isTopIcon) {
-      // Bottom-right icon: navigate to link if available, otherwise to project detail
-      if (link) {
-        if (link.startsWith('http') || link.startsWith('//')) {
-          window.open(link, '_blank', 'noopener,noreferrer');
-        } else {
-          navigate(link);
-        }
-      } else if (cardTitle) {
-        // Fallback to project detail page (for MyProjects compatibility)
-        navigate(`/myprojects/${encodeURIComponent(cardTitle)}`);
+      // Bottom-right icon: Always navigate to project detail page
+      if (cardTitle) {
+        navigate(`/projects/${encodeURIComponent(cardTitle)}`);
       }
     }
     
@@ -615,7 +608,7 @@ const MagicBento = ({
     // If bottom icon is active, navigate to project detail page
     else if (bottomIcon && bottomIcon.classList.contains('icon-active') && card.title) {
       e.preventDefault();
-      navigate(`/myprojects/${encodeURIComponent(card.title)}`);
+      navigate(`/projects/${encodeURIComponent(card.title)}`);
     }
   };
 
@@ -680,13 +673,47 @@ const MagicBento = ({
                 
                 {/* Conditional content - Spline, card type, or regular card content */}
                 {card.splineUrl ? (
-                  // Spline content only
+                  // Spline content with labels overlay (like textual cards)
                   <>
                     <spline-viewer 
                       url={card.splineUrl}
                       onError={() => console.warn('Spline scene failed to load')}
+                      style={{
+                        width: '150%',
+                        height: '150%',
+                        position: 'absolute',
+                        top: '-25%',
+                        left: '-25%',
+                        borderRadius: 'inherit',
+                        overflow: 'hidden',
+                        transformOrigin: 'center center'
+                      }}
                     ></spline-viewer>
-                    <div className="spline-cover"></div>
+                    <div 
+                      className="spline-cover"
+                      style={{
+                        position: 'absolute',
+                        bottom: '18px',
+                        right: '7px',
+                        minWidth: '30%',
+                        maxWidth: '50%',
+                        height: '40px',
+                        background: '#060010',
+                        pointerEvents: 'none',
+                        borderRadius: 'inherit',
+                        zIndex: 100
+                      }}
+                    ></div>
+                    {/* Add labels overlay for Spline cards */}
+                    <div className="card__header card__header--spline">
+                      <div className="card__labels">
+                        {(card.labels || [card.label]).filter(Boolean).map((label, idx) => (
+                          <span key={idx} className="card__label" data-count={(card.labels || [card.label]).filter(Boolean).length}>
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </>
                 ) : card.type === 'textual' ? (
                   // Textual card - no labels, just title and full description
@@ -891,13 +918,47 @@ const MagicBento = ({
               
               {/* Conditional content - Spline, card type, or regular card content */}
               {card.splineUrl ? (
-                // Spline content only
+                // Spline content with labels overlay (like textual cards)
                 <>
                   <spline-viewer 
                     url={card.splineUrl}
                     onError={() => console.warn('Spline scene failed to load')}
+                    style={{
+                      width: '150%',
+                      height: '150%',
+                      position: 'absolute',
+                      top: '-25%',
+                      left: '-25%',
+                      borderRadius: 'inherit',
+                      overflow: 'hidden',
+                      transformOrigin: 'center center'
+                    }}
                   ></spline-viewer>
-                  <div className="spline-cover"></div>
+                  <div 
+                    className="spline-cover"
+                    style={{
+                      position: 'absolute',
+                      bottom: '18px',
+                      right: '7px',
+                      minWidth: '30%',
+                      maxWidth: '50%',
+                      height: '40px',
+                      background: '#060010',
+                      pointerEvents: 'none',
+                      borderRadius: 'inherit',
+                      zIndex: 100
+                    }}
+                  ></div>
+                  {/* Add labels overlay for Spline cards */}
+                  <div className="card__header card__header--spline">
+                    <div className="card__labels">
+                      {(card.labels || [card.label]).filter(Boolean).map((label, idx) => (
+                        <span key={idx} className="card__label" data-count={(card.labels || [card.label]).filter(Boolean).length}>
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </>
               ) : card.type === 'textual' ? (
                 // Textual card - no labels, just title and full description

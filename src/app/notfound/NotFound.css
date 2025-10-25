@@ -1,0 +1,32 @@
+/* 404 Not Found Page Styles - Following Home Page Design */
+.notfound-page {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: black;
+  color: white;
+  overflow: hidden;
+  padding-top: 8rem;
+}
+
+
+
+
+.notfound-lottie-container {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.notfound-lottie {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}

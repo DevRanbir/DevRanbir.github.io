@@ -7,6 +7,7 @@ import reportWebVitals from './reportWebVitals';
 // Suppress specific Three.js NaN errors and browser extension runtime errors
 const originalError = console.error;
 const originalWarn = console.warn;
+console.log = function() {}; // Disable all console.log output
 
 console.error = (...args) => {
   const message = args.join(' ');

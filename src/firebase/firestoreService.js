@@ -7,12 +7,10 @@ import {
   deleteDoc,
   onSnapshot,
   collection,
-  addDoc,
   query,
   orderBy,
   limit,
   where,
-  serverTimestamp,
   getDocs
 } from 'firebase/firestore';
 
@@ -67,7 +65,7 @@ const getGithubSyncDocRef = () => {
 
 const getChatCollectionRef = () => {
   if (!db) throw new Error('Firebase is not configured. Check your environment variables.');
-  return getChatCollectionRef();
+  return collection(db, 'chat-history');
 };
 
 // Default data structure
@@ -121,6 +119,36 @@ const defaultContactsData = {
     status: 'Available'
   },
   lastUpdated: new Date().toISOString()
+};
+
+// Function to get GitHub token from Firebase or environment variable
+export const getGitHubToken = async () => {
+  try {
+    // First, try to get token from environment variable
+    const envToken = process.env.REACT_APP_GITHUB_TOKEN;
+    if (envToken) {
+      console.log('Using GitHub token from environment variable');
+      return envToken;
+    }
+    
+    // If not in env, try to get from Firebase
+    await ensureAuthenticated();
+    const tokenDocRef = doc(db, 'github-token', 'token');
+    const tokenSnap = await getDoc(tokenDocRef);
+    
+    if (tokenSnap.exists()) {
+      const tokenData = tokenSnap.data();
+      console.log('Using GitHub token from Firebase');
+      return tokenData.value;
+    }
+    
+    console.warn('No GitHub token found in environment or Firebase');
+    return null;
+  } catch (error) {
+    console.error('Error fetching GitHub token:', error);
+    // Return env token as fallback
+    return process.env.REACT_APP_GITHUB_TOKEN || null;
+  }
 };
 
 // Initialize the document with default data if it doesn't exist

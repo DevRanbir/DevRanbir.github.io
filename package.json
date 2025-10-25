@@ -10,12 +10,13 @@
   },
   "private": true,
   "dependencies": {
-    "@lottiefiles/dotlottie-react": "^0.14.2",
+    "@lottiefiles/dotlottie-react": "^0.14.4",
     "@react-oauth/google": "^0.12.2",
     "@react-three/drei": "^10.5.2",
     "@react-three/fiber": "^9.2.0",
     "@react-three/rapier": "^2.1.0",
     "@splinetool/react-spline": "^4.0.0",
+    "@tailwindcss/postcss": "^4.1.16",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
@@ -26,7 +27,9 @@
     "framer-motion": "^12.23.7",
     "gapi-script": "^1.2.0",
     "gh-pages": "^6.3.0",
+    "groq-sdk": "^0.34.0",
     "gsap": "^3.13.0",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.547.0",
     "meshline": "^3.3.1",
     "react": "^19.1.0",
@@ -71,7 +74,6 @@
   "devDependencies": {
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.16",
     "tailwindcss-animate": "^1.0.7"
   }
 }

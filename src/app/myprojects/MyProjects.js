@@ -1,38 +1,150 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import MagicBento from './MagicBento';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import MagicBento from '../../components/MagicBento';
+import CommandLine from '../../components/CommandLine';
 import './MyProjects.css';
-import Lanyard from './Lanyard'
+import Lanyard from '../../components/Lanyard'
 import { FaGithub, FaLinkedin, FaTwitter, FaInstagram, FaEnvelope, FaDiscord } from 'react-icons/fa';
-import { getHomepageData } from '../firebase/firestoreService';
+import { getHomepageData, getGitHubToken } from '../../firebase/firestoreService';
 
 // GitHub service
 const githubService = {
   baseURL: 'https://api.github.com',
+  token: null, // Will be set from Firebase or env
   
-  // Random HD background images - using Picsum for reliable random images
-  getRandomImage() {
-    // Generate a random seed for consistent but varied images
-    const seed = Math.floor(Math.random() * 10000);
+  // Set the GitHub token
+  async setToken() {
+    if (!this.token) {
+      this.token = await getGitHubToken();
+    }
+    return this.token;
+  },
+  
+  // Project-specific images mapping
+  getProjectImage(repoName) {
+    // Convert repo name to lowercase for case-insensitive matching
+    const name = repoName.toLowerCase().replace(/[-_\s]/g, '');
     
-    // Picsum Photos - Lorem Picsum provides reliable placeholder images
-    // Using 800x600 for HD quality, with blur effect for better text readability
+    console.log('Matching image for repo:', repoName, '-> normalized:', name);
+    
+    // Mapping of repository names to their corresponding images in public folder
+    // Using normalized names (no dashes, underscores, or spaces)
+    const imageMap = {
+      // Periodic Table
+      'periodictable': '/Ptable.png',
+      'ptable': '/Ptable.png',
+      'periodicapp': '/Ptable.png',
+      
+      // Quicky Quizy
+      'quickyquizy': '/Quicky.png',
+      'quicky': '/Quicky.png',
+      'quiz': '/Quicky.png',
+      
+      // ChocoLava / Emergency
+      'chocolava': '/SCC.png',
+      'scc': '/SCC.png',
+      'emergency': '/SCC.png',
+      'physiopluse': '/SCC.png',
+      'physioplus': '/SCC.png',
+      
+      // SpeechViber
+      'speechviber': '/Speechviber.png',
+      'speech': '/Speechviber.png',
+      'viber': '/Speechviber.png',
+      
+      // Talkify
+      'talkify': '/Talkify.png',
+      'talk': '/Talkify.png',
+      
+      // ArtGallery
+      'artgallery': '/ArtGalley.png',
+      'artgalley': '/ArtGalley.png',
+      'art': '/ArtGalley.png',
+      'nft': '/ArtGalley.png',
+      'gallery': '/ArtGalley.png',
+      
+      // Bookmark Manager
+      'bookmark': '/Bookmark-manager.png',
+      'bookmarkmanager': '/Bookmark-manager.png',
+      'bookmarks': '/Bookmark-manager.png',
+      
+      // CuSpark
+      'cuspark': '/CuSpark.png',
+      'sparkcu': '/CuSpark.png',
+      'ideathon': '/CuSpark.png',
+      'hackathon': '/CuSpark.png',
+      'spark': '/CuSpark.png',
+      
+      // HGCR
+      'hgcr': '/HGCR.png',
+      'gesture': '/HGCR.png',
+      'robotics': '/HGCR.png',
+      'handgesture': '/HGCR.png',
+      
+      // RepoViewer
+      'repoviewer': '/RepoViewer.png',
+      'githubviewer': '/RepoViewer.png',
+      'viewer': '/RepoViewer.png'
+    };
+    
+    // Try exact match first
+    if (imageMap[name]) {
+      console.log('✓ Exact match found:', imageMap[name]);
+      return imageMap[name];
+    }
+    
+    // Try partial match
+    for (const [key, imagePath] of Object.entries(imageMap)) {
+      if (name.includes(key) || key.includes(name)) {
+        console.log('✓ Partial match found:', key, '->', imagePath);
+        return imagePath;
+      }
+    }
+    
+    // Fallback to random HD background images from Picsum
+    console.log('✗ No match found, using fallback image');
+    const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const seed = hash % 10000;
+    
     return `https://picsum.photos/seed/${seed}/800/600`;
   },
   
   async getUserRepositories(username) {
     try {
+      // Get the token first
+      await this.setToken();
+      
+      // Prepare headers
+      const headers = {
+        'Accept': 'application/vnd.github.mercy-preview+json' // Required to get topics
+      };
+      
+      // Add authorization if token is available
+      if (this.token) {
+        headers['Authorization'] = `Bearer ${this.token}`;
+        console.log('Using authenticated GitHub API request');
+      } else {
+        console.warn('Making unauthenticated GitHub API request (rate limit: 60/hour)');
+      }
+      
       // Include Accept header to get topics from GitHub API
       const response = await fetch(`${this.baseURL}/users/${username}/repos?sort=updated&per_page=100`, {
-        headers: {
-          'Accept': 'application/vnd.github.mercy-preview+json' // Required to get topics
-        }
+        headers
       });
+      
       if (!response.ok) {
+        // Check if it's a rate limit error
+        if (response.status === 403) {
+          const errorData = await response.json();
+          if (errorData.message && errorData.message.includes('rate limit')) {
+            throw new Error('GitHub API rate limit exceeded. Please try again later or add a GitHub token.');
+          }
+        }
         throw new Error(`GitHub API error: ${response.status}`);
       }
+      
       const repos = await response.json();
       console.log('Sample repo data:', repos[0]); // Debug: Check first repo structure
+      console.log(`Fetched ${repos.length} repositories from GitHub`);
       return repos;
     } catch (error) {
       console.error('Error fetching repositories:', error);
@@ -51,7 +163,7 @@ const githubService = {
       title: repo.name,
       description: repo.description || 'No description available',
       labels: labels, // Pass all labels instead of just one
-      image: this.getRandomImage(), // Always add a random HD image
+      image: this.getProjectImage(repo.name), // Use project-specific image from public folder
       link: repo.homepage || repo.html_url, // Use homepage if available, otherwise repo URL
       stars: repo.stargazers_count || 0,
       isPinned: repo.topics?.includes('pinned') || repo.topics?.includes('featured'),
@@ -64,7 +176,6 @@ const githubService = {
 };
 
 const MyProjects = () => {
-  const navigate = useNavigate();
   
   const [sections, setSections] = useState([]); // Start empty, will populate from GitHub
   const [allRepos, setAllRepos] = useState([]); // Store all fetched repos
@@ -77,8 +188,6 @@ const MyProjects = () => {
   const GITHUB_USERNAME = 'DevRanbir'; // Replace with your GitHub username
   
   // Command line state
-  const [commandInput, setCommandInput] = useState('');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredCardDataSets, setFilteredCardDataSets] = useState([]);
@@ -90,57 +199,177 @@ const MyProjects = () => {
   const [socialLinks, setSocialLinks] = useState([
     { id: 'github', url: 'https://github.com/DevRanbir', icon: <FaGithub /> },
     { id: 'linkedin', url: 'https://linkedin.com/in/yourname', icon: <FaLinkedin /> },
-    { id: 'twitter', url: 'https://twitter.com/yourname', icon: <FaTwitter /> },
     { id: 'instagram', url: 'https://instagram.com/yourname', icon: <FaInstagram /> },
     { id: 'mail', url: 'mailto:your.email@example.com', icon: <FaEnvelope /> },
-    { id: 'discord', url: 'https://discord.gg/yourserver', icon: <FaDiscord /> }
+        { id: 'discord', url: 'https://discord.gg/yourserver', icon: <FaDiscord /> }
   ]);
   
-  // Dropdown items for navigation
-  const dropdownItems = [
+  // AI Context - Memoized to avoid unnecessary re-renders
+  const aiContext = useMemo(() => {
+    // Flatten all projects from filteredCardDataSets
+    // Note: filteredCardDataSets is an array of arrays (each section is an array of cards)
+    const allProjects = (filteredCardDataSets || []).flatMap(section => 
+      (section || []).map(card => ({
+        name: card.title,
+        description: card.description,
+        technologies: card.labels || card.topics || [],
+        url: card.link,
+        featured: card.isPinned || false,
+        stars: card.stars || 0
+      }))
+    );
+    
+    return {
+      currentPage: 'projects',
+      projects: allProjects,
+      totalProjects: allProjects.length,
+      searchQuery: searchQuery,
+      activeFilter: activeFilter,
+      socialLinks: socialLinks,
+      pages: ['home', 'projects', 'documents', 'about', 'contacts']
+    };
+  }, [filteredCardDataSets, searchQuery, activeFilter, socialLinks]);
+  
+  // Handle AI responses
+  const handleAIResponse = useCallback((response) => {
+    console.log('🤖 AI Response:', response);
+    
+    // Check if AI message contains project names to filter
+    const extractProjectNames = (message) => {
+      const allProjects = cardDataSets.flat();
+      const projectNames = [];
+      
+      // Look for project names in the message
+      allProjects.forEach(card => {
+        const titleLower = card.title.toLowerCase();
+        const messageLower = message.toLowerCase();
+        
+        // Check if project name appears in message
+        if (messageLower.includes(titleLower)) {
+          projectNames.push(card.title);
+        }
+      });
+      
+      return projectNames;
+    };
+    
+    // Handle specific actions from AI
+    if (response.hasAction) {
+      switch (response.action) {
+        case 'filter':
+          // AI wants to filter projects by technology/keyword
+          console.log('🎯 Filtering projects by:', response.target);
+          
+          // Check if message contains specific project names
+          const projectNames = extractProjectNames(response.message || '');
+          
+          if (projectNames.length > 0) {
+            // Create a search query that matches any of these project names
+            console.log('📋 Found project names in response:', projectNames);
+            // Join with | for OR matching in filter
+            const searchTerms = projectNames.join('|');
+            setSearchQuery(searchTerms);
+          } else {
+            // Filter by technology/keyword
+            setSearchQuery(response.target);
+          }
+          
+          // Reset category filter when searching by technology
+          setActiveFilter('all');
+          break;
+          
+        case 'search':
+          // AI wants to search
+          setSearchQuery(response.target);
+          setActiveFilter('all');
+          break;
+          
+        case 'clear':
+        case 'reset':
+          // AI wants to clear filters
+          console.log('🔄 Clearing all filters');
+          setSearchQuery('');
+          setActiveFilter('all');
+          break;
+          
+        case 'open':
+          // AI wants to open a project
+          const allProjects = filteredCardDataSets.flat();
+          const project = allProjects.find(card => 
+            card.title.toLowerCase().includes(response.target.toLowerCase())
+          );
+          if (project && project.link) {
+            window.open(project.link, '_blank');
+          }
+          break;
+          
+        default:
+          break;
+      }
+    } else {
+      // No action specified - check if user is asking to clear/reset
+      const messageLower = (response.message || '').toLowerCase();
+      if (messageLower.includes('clear') || 
+          messageLower.includes('reset') || 
+          messageLower.includes('show all') ||
+          messageLower.includes('remove filter')) {
+        console.log('🔄 Clearing filters based on message');
+        setSearchQuery('');
+        setActiveFilter('all');
+      }
+    }
+  }, [filteredCardDataSets, cardDataSets]);
+  
+  // Command templates for edit mode
+  const commandTemplates = [
     { 
-      id: 1, 
-      name: 'Documents', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 11H4m15.5 5a.5.5 0 0 0 .5-.5V8a1 1 0 0 0-1-1h-3.75a1 1 0 0 1-.829-.44l-1.436-2.12a1 1 0 0 0-.828-.44H8a1 1 0 0 0-1 1M4 9v10a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1h-3.75a1 1 0 0 1-.829-.44L9.985 8.44A1 1 0 0 0 9.157 8H5a1 1 0 0 0-1 1Z"/>
-      </svg>, 
-      type: 'folder' 
+      id: 'add', 
+      name: 'add',
+      template: 'add [name] [link]', 
+      description: 'Add a new project',
+      icon: '➕',
+      className: 'explorer-item command-template',
+      onClick: (item) => {
+        setSearchQuery(item.template);
+      }
     },
     { 
-      id: 2, 
-      name: 'Projects', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 9h6m-6 3h6m-6 3h6M6.996 9h.01m-.01 3h.01m-.01 3h.01M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/>
-      </svg>, 
-      type: 'folder' 
+      id: 'edit', 
+      name: 'edit',
+      template: 'edit [name]', 
+      description: 'Edit a project',
+      icon: '✏️',
+      className: 'explorer-item command-template',
+      onClick: (item) => {
+        setSearchQuery(item.template);
+      }
     },
     { 
-      id: 3, 
-      name: 'Home', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m4 12 8-8 8 8M6 10.5V19a1 1 0 0 0 1 1h3v-3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3h3a1 1 0 0 0 1-1v-8.5"/>
-      </svg>, 
-      type: 'action' 
+      id: 'remove', 
+      name: 'remove',
+      template: 'remove [name]', 
+      description: 'Remove a project',
+      icon: '❌',
+      className: 'explorer-item command-template',
+      onClick: (item) => {
+        setSearchQuery(item.template);
+      }
     },
     { 
-      id: 4, 
-      name: 'About', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 9h3m-3 3h3m-3 3h3m-6 1c-.306-.613-.933-1-1.618-1H7.618c-.685 0-1.312.387-1.618 1M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm7 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z"/>
-      </svg>, 
-      type: 'action' 
-    },
-    { 
-      id: 5, 
-      name: 'Contact', 
-      icon: <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.079 6.839a3 3 0 0 0-4.255.1M13 20h1.083A3.916 3.916 0 0 0 18 16.083V9A6 6 0 1 0 6 9v7m7 4v-1a1 1 0 0 0-1-1h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1Zm-7-4v-6H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1Zm12-6h1a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-1v-6Z"/>
-      </svg>, 
-      type: 'action' 
+      id: 'exit', 
+      name: 'exit',
+      template: 'exit', 
+      description: 'Exit edit mode',
+      icon: '🚪',
+      className: 'explorer-item command-template',
+      onClick: () => {
+        setEditMode(false);
+        setSearchQuery('');
+      }
     },
   ];
 
-  // Filter links for project types (similar to social media container)
+  // Filter links for project types
   const filterLinks = [
     { 
         id: 'all', 
@@ -151,7 +380,11 @@ const MyProjects = () => {
         </svg>
         ), 
         name: 'All Projects',
-        type: 'all'
+        type: 'all',
+        onClick: (item) => {
+          setActiveFilter(item.type);
+          setSearchQuery('');
+        }
     },
     { 
         id: 'web', 
@@ -165,7 +398,11 @@ const MyProjects = () => {
         </svg>
         ), 
         name: 'Web Apps',
-        type: 'web'
+        type: 'web',
+        onClick: (item) => {
+          setActiveFilter(item.type);
+          setSearchQuery('');
+        }
     },
     { 
         id: 'mobile', 
@@ -176,7 +413,11 @@ const MyProjects = () => {
         </svg>
         ), 
         name: 'Mobile Apps',
-        type: 'mobile'
+        type: 'mobile',
+        onClick: (item) => {
+          setActiveFilter(item.type);
+          setSearchQuery('');
+        }
     },
     { 
         id: 'desktop', 
@@ -188,7 +429,11 @@ const MyProjects = () => {
         </svg>
         ), 
         name: 'Desktop Apps',
-        type: 'desktop'
+        type: 'desktop',
+        onClick: (item) => {
+          setActiveFilter(item.type);
+          setSearchQuery('');
+        }
     },
     { 
         id: 'ai', 
@@ -199,7 +444,11 @@ const MyProjects = () => {
             </svg>
         ), 
         name: 'AI/ML',
-        type: 'ai'
+        type: 'ai',
+        onClick: (item) => {
+          setActiveFilter(item.type);
+          setSearchQuery('');
+        }
     },
     { 
         id: 'blockchain', 
@@ -214,16 +463,12 @@ const MyProjects = () => {
         </svg>
         ), 
         name: 'Blockchain',
-        type: 'blockchain'
+        type: 'blockchain',
+        onClick: (item) => {
+          setActiveFilter(item.type);
+          setSearchQuery('');
+        }
     }
-    ];
-  
-  // Command templates for edit mode
-  const commandTemplates = [
-    { id: 'add', template: 'add [name] [link]', description: 'Add a new project' },
-    { id: 'edit', template: 'edit [name]', description: 'Edit a project' },
-    { id: 'remove', template: 'remove [name]', description: 'Remove a project' },
-    { id: 'exit', template: 'exit', description: 'Exit edit mode' },
   ];
   
   // Function to categorize projects based on topics, languages, and keywords
@@ -263,7 +508,7 @@ const MyProjects = () => {
         searchableContent.includes('flutter') || 
         searchableContent.includes('react-native') || 
         searchableContent.includes('expo') || 
-        searchableContent.includes('app') && (searchableContent.includes('mobile') || searchableContent.includes('phone'))) {
+        (searchableContent.includes('app') && (searchableContent.includes('mobile') || searchableContent.includes('phone')))) {
       return 'mobile';
     }
     
@@ -274,7 +519,7 @@ const MyProjects = () => {
         searchableContent.includes('macos') || 
         searchableContent.includes('linux') || 
         searchableContent.includes('gui') || 
-        searchableContent.includes('application') && !searchableContent.includes('web')) {
+        (searchableContent.includes('application') && !searchableContent.includes('web'))) {
       return 'desktop';
     }
     
@@ -323,105 +568,9 @@ const MyProjects = () => {
     return 'other';
   };
 
-  // Command line handlers
-  const handleInputChange = (e) => {
-    const value = e.target.value;
-    setCommandInput(value);
-    
-    // Update search query for filtering cards
+  // Handlers for CommandLine component
+  const handleSearchChange = (value) => {
     setSearchQuery(value);
-    
-    // Show dropdown for navigation commands
-    setIsDropdownOpen(value.length > 0 && !editMode);
-  };
-  
-  const handleInputFocus = () => {
-    setIsDropdownOpen(true);
-  };
-  
-  const handleInputBlur = () => {
-    // Delay closing to allow clicking on dropdown items
-    setTimeout(() => setIsDropdownOpen(false), 150);
-  };
-  
-  const handleItemClick = (item) => {
-    if (editMode && typeof item === 'object' && 'template' in item) {
-      // This is a command template
-      setCommandInput(item.template);
-    } else if (item.type && ['all', 'web', 'mobile', 'desktop', 'ai', 'blockchain'].includes(item.type)) {
-      // This is a filter item
-      setActiveFilter(item.type);
-      setCommandInput(item.name);
-      console.log(`Filter applied: ${item.type}`);
-    } else {
-      // This is a regular folder/file item
-      setCommandInput(item.name);
-      console.log(`Selected: ${item.name}`);
-      
-      // Handle navigation based on the selected item
-      if (item.name === 'Documents') {
-        navigate('/documents');
-      } else if (item.name === 'Projects') {
-        navigate('/projects');
-      } else if (item.name === 'Home') {
-        navigate('/');
-      } else if (item.name === 'About') {
-        navigate('/about');
-      } else if (item.name === 'Contact') {
-        navigate('/contacts');
-      }
-    }
-    setIsDropdownOpen(false);
-  };
-  
-  const handleCommandSubmit = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const command = commandInput.toLowerCase().trim();
-      
-      // Handle filter commands
-      if (command === 'all projects' || command === 'all') {
-        setActiveFilter('all');
-      } else if (command === 'web apps' || command === 'web') {
-        setActiveFilter('web');
-      } else if (command === 'mobile apps' || command === 'mobile') {
-        setActiveFilter('mobile');
-      } else if (command === 'desktop apps' || command === 'desktop') {
-        setActiveFilter('desktop');
-      } else if (command === 'ai/ml' || command === 'ai' || command === 'ml') {
-        setActiveFilter('ai');
-      } else if (command === 'blockchain') {
-        setActiveFilter('blockchain');
-      }
-      // Handle navigation commands
-      else if (command === 'documents') {
-        navigate('/documents');
-      } else if (command === 'projects') {
-        navigate('/projects');
-      } else if (command === 'home') {
-        navigate('/');
-      } else if (command === 'about') {
-        navigate('/about');
-      } else if (command === 'contact' || command === 'contacts') {
-        navigate('/contacts');
-      } else if (command === 'edit') {
-        setEditMode(true);
-      } else if (command === 'exit') {
-        setEditMode(false);
-      } else if (command === 'clear' || command === 'reset') {
-        // Clear search and reset filter
-        setCommandInput('');
-        setSearchQuery('');
-        setActiveFilter('all');
-      }
-      
-      setIsDropdownOpen(false);
-    } else if (e.key === 'Escape') {
-      // Clear search on Escape
-      setCommandInput('');
-      setSearchQuery('');
-      setIsDropdownOpen(false);
-    }
   };
 
   // Fetch social links from Firebase
@@ -442,7 +591,7 @@ const MyProjects = () => {
           
           const linksWithIcons = data.socialLinks.map(link => ({
             ...link,
-            icon: iconMap[link.id] || <FaGithub /> // Fallback to GitHub icon
+            icon: iconMap[link.id] || <FaDiscord /> // Fallback to Discord icon
           }));
           
           setSocialLinks(linksWithIcons);
@@ -516,25 +665,57 @@ const MyProjects = () => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       
+      console.log('🔍 Filtering with query:', query);
+      console.log('📊 Total cards before filter:', filteredCards.length);
+      
+      // Check if query contains multiple project names (separated by |)
+      const isMultipleProjects = query.includes('|');
+      const projectNames = isMultipleProjects ? query.split('|').map(n => n.trim()) : [query];
+      
       filteredCards = filteredCards.filter(card => {
+        // If multiple project names, match exact project title
+        if (isMultipleProjects) {
+          const titleLower = card.title.toLowerCase();
+          const matched = projectNames.some(name => titleLower === name);
+          if (matched) {
+            console.log('✅ Match by exact project name:', card.title);
+          }
+          return matched;
+        }
+        
+        // Single query - match against all fields
         // Match against title
-        if (card.title.toLowerCase().includes(query)) return true;
+        if (card.title.toLowerCase().includes(query)) {
+          console.log('✅ Match by title:', card.title);
+          return true;
+        }
         
         // Match against description
-        if (card.description && card.description.toLowerCase().includes(query)) return true;
+        if (card.description && card.description.toLowerCase().includes(query)) {
+          console.log('✅ Match by description:', card.title);
+          return true;
+        }
         
         // Match against labels/topics
         if (card.labels && card.labels.some(label => 
           label.toLowerCase().includes(query)
-        )) return true;
+        )) {
+          console.log('✅ Match by label:', card.title, '- labels:', card.labels);
+          return true;
+        }
         
         // Match against topics
         if (card.topics && card.topics.some(topic => 
           topic.toLowerCase().includes(query)
-        )) return true;
+        )) {
+          console.log('✅ Match by topic:', card.title, '- topics:', card.topics);
+          return true;
+        }
         
         return false;
       });
+      
+      console.log('📊 Total cards after filter:', filteredCards.length);
     }
     
     // Re-organize filtered cards into sections
@@ -563,46 +744,47 @@ const MyProjects = () => {
         // Convert repos to card data
         const cardData = repos.map(repo => githubService.convertRepoToCardData(repo));
         
-        // Separate pinned/important repos
-        // Priority: 1. Has 'pinned' or 'featured' topic, 2. Stars > 5
-        // IMPORTANT: Never show repos with "No description available" in top 5
-        const pinnedCards = cardData
-          .filter(card => {
-            // Exclude repos without proper description
-            if (!card.description || card.description === 'No description available') {
-              return false;
-            }
-            
-            // Explicitly pinned
-            if (card.isPinned) return true;
-            // High stars
-            if (card.stars > 2) return true;
-            return false;
-          })
-          .sort((a, b) => {
-            // Sort by: pinned first, then by stars
-            if (a.isPinned && !b.isPinned) return -1;
-            if (!a.isPinned && b.isPinned) return 1;
-            return b.stars - a.stars;
-          })
-          .slice(0, 5); // Keep only top 5 pinned
-        
-        // Get remaining repos
-        const remainingCards = cardData.filter(card => 
-          !pinnedCards.includes(card)
+        // Separate cards with matched images vs fallback images
+        const cardsWithMatchedImages = cardData.filter(card => 
+          card.image && !card.image.includes('picsum.photos')
         );
         
-        // Randomize the remaining cards using Fisher-Yates shuffle
-        const shuffled = [...remainingCards];
-        for (let i = shuffled.length - 1; i > 0; i--) {
+        const cardsWithFallbackImages = cardData.filter(card => 
+          card.image && card.image.includes('picsum.photos')
+        );
+        
+        console.log('Cards with matched images:', cardsWithMatchedImages.length);
+        console.log('Cards with fallback images:', cardsWithFallbackImages.length);
+        
+        // Shuffle all cards with matched images using Fisher-Yates algorithm
+        // This randomizes their positions on each reload
+        const shuffledMatchedCards = [...cardsWithMatchedImages];
+        for (let i = shuffledMatchedCards.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          [shuffledMatchedCards[i], shuffledMatchedCards[j]] = [shuffledMatchedCards[j], shuffledMatchedCards[i]];
         }
         
-        // Combine pinned at top with shuffled remaining
-        const finalCardData = [...pinnedCards, ...shuffled];
+        // Take the first 9 shuffled cards with matched images for top positions
+        const topMatchedCards = shuffledMatchedCards.slice(0, 9);
         
-        console.log('Pinned repos:', pinnedCards.map(c => c.title));
+        // Get any remaining matched cards after top 9
+        const restMatchedCards = shuffledMatchedCards.slice(9);
+        
+        // Shuffle fallback cards
+        const shuffledFallbackCards = [...cardsWithFallbackImages];
+        for (let i = shuffledFallbackCards.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffledFallbackCards[i], shuffledFallbackCards[j]] = [shuffledFallbackCards[j], shuffledFallbackCards[i]];
+        }
+        
+        // Combine: Top 9 randomized matched cards, then remaining matched, then fallback
+        const finalCardData = [
+          ...topMatchedCards,
+          ...restMatchedCards,
+          ...shuffledFallbackCards
+        ];
+        
+        console.log('Top 9 cards (all with matched images):', topMatchedCards.map(c => c.title));
         console.log('Total repos:', finalCardData.length);
         
         // Split into sections of CARDS_PER_SECTION
@@ -721,71 +903,15 @@ const MyProjects = () => {
       </div>
       
       <div className="myprojects-scroll-container">
-        {/* Command Line Interface */}
-        <div className="command-line-container">
-          <div className="glass-panel">
-            <form id="command-form" autoComplete="off" onSubmit={(e) => e.preventDefault()}>
-              <div className="command-input-wrapper">
-                <span className="prompt-symbol">{editMode ? '🔓' : '$'}</span>
-                <input
-                  type="text"
-                  className="command-input"
-                  placeholder={editMode ? "Type a command or click a template below..." : "Search projects, navigate, or run a command"}
-                  value={commandInput}
-                  onChange={handleInputChange}
-                  onFocus={handleInputFocus}
-                  onBlur={handleInputBlur}
-                  onKeyDown={handleCommandSubmit}
-                  autoComplete="off"
-                />
-                <span className={`dropdown-indicator ${isDropdownOpen ? 'open' : 'closed'}`}>
-                  {isDropdownOpen ? (
-                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" strokeWidth="2">
-                      <polyline points="6,9 12,15 18,9"></polyline>
-                    </svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" strokeWidth="2">
-                      <polyline points="15,18 9,12 15,6"></polyline>
-                    </svg>
-                  )}
-                </span>
-              </div>
-            </form>
-            
-            {isDropdownOpen && !searchQuery && (
-              <div className="dropdown-panel">
-                <div className="explorer-grid">
-                  {editMode ? 
-                    // Command templates in edit mode
-                    commandTemplates.map((cmd) => (
-                      <div 
-                        key={cmd.id} 
-                        className="explorer-item command-template"
-                        onClick={() => handleItemClick(cmd)}
-                      >
-                        <div className="item-icon">{cmd.id === 'exit' ? '🚪' : cmd.id === 'add' ? '➕' : cmd.id === 'edit' ? '✏️' : cmd.id === 'remove' ? '❌' : '📝'}</div>
-                        <div className="item-name">{cmd.id}</div>
-                        <div className="item-description">{cmd.description}</div>
-                      </div>
-                    ))
-                    :
-                    // Regular items when not in edit mode
-                    [...dropdownItems, ...filterLinks].map((item) => (
-                      <div 
-                        key={item.id} 
-                        className="explorer-item"
-                        onClick={() => handleItemClick(item)}
-                      >
-                        <div className="item-icon">{item.icon}</div>
-                        <div className="item-name">{item.name}</div>
-                      </div>
-                    ))
-                  }
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Command Line Interface with AI */}
+        <CommandLine 
+          editMode={editMode}
+          onSearchChange={handleSearchChange}
+          additionalItems={editMode ? commandTemplates : filterLinks}
+          placeholder={editMode ? "Type a command or click a template below..." : "Search projects, navigate, or ask AI anything..."}
+          aiContext={aiContext}
+          onAIResponse={handleAIResponse}
+        />
 
         <Lanyard position={[2.5, 2, 20]} gravity={[0, -40, 0]} />
         
@@ -829,7 +955,7 @@ const MyProjects = () => {
                     <button 
                       onClick={() => {
                         setActiveFilter('all');
-                        setCommandInput('');
+                        setSearchQuery('');
                       }}
                       style={{
                         background: 'none',
@@ -873,7 +999,7 @@ const MyProjects = () => {
             ) : (
               !isLoading && (searchQuery || activeFilter !== 'all') && (
                 <div className="no-results-message">
-                  <h3></h3>
+                  <h3>No results found</h3>
                 </div>
               )
             )}
