@@ -85,7 +85,7 @@ const CommandLine = ({
   editMode = false,
   onSearchChange = null,
   additionalItems = [],
-  placeholder = "Navigate or run a command",
+  placeholder = "Ask, Navigate or run a command",
   onCommandSubmit = null,
   aiContext = null, // Context for AI (projects, documents, etc.)
   onAIResponse = null // Callback for AI responses
@@ -175,6 +175,35 @@ const CommandLine = ({
       </svg>, 
       type: 'action',
       path: '/contacts'
+    },
+    { 
+      id: 6, 
+      name: aiEnabled ? 'Turn OFF AI' : 'Turn ON AI', 
+      icon: aiEnabled ? (
+        <svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+          <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m15 9-6 6m0-6 6 6m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+        </svg>
+      ) : (
+        <svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+          <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21a9 9 0 1 1 0-18c1.052 0 2.062.18 3 .512M7 9.577l3.923 3.923 8.5-8.5M17 14v6m-3-3h6"/>
+        </svg>
+      ), 
+      type: 'toggle',
+      onClick: () => {
+        const newState = !aiEnabled;
+        setAIEnabled(newState);
+        setAiEnabledState(newState);
+        setShowChat(true);
+        const message = {
+          role: 'assistant',
+          content: newState 
+            ? ' AI has been enabled. You can now use AI commands and ask questions!' 
+            : ' AI has been disabled. Only basic commands will work. Click the toggle again to re-enable.',
+          isError: false
+        };
+        setConversationHistory(prev => [...prev, message]);
+        setIsDropdownOpen(true);
+      }
     },
   ];
   
@@ -273,13 +302,13 @@ const CommandLine = ({
     // Handle custom items first (filters, templates, etc.)
     if (item.onClick) {
       item.onClick(item);
-      setCommandInput(item.name || item.template);
+      // Don't write to input for toggle buttons and actions
       setIsDropdownOpen(false);
       return;
     }
     
     // Handle navigation based on the selected item
-    setCommandInput(item.name);
+    // Don't write to input, just navigate
     console.log(`Selected: ${item.name}`);
     
     if (item.path) {
@@ -335,8 +364,8 @@ const CommandLine = ({
         const statusMessage = {
           role: 'assistant',
           content: aiEnabled 
-            ? '✅ AI is currently ENABLED and ready to help!' 
-            : '🚫 AI is currently DISABLED. Type "turn on ai" to enable it.',
+            ? ' AI is currently ENABLED and ready to help!' 
+            : ' AI is currently DISABLED. Type "turn on ai" to enable it.',
           isError: false
         };
         setConversationHistory(prev => [...prev, statusMessage]);

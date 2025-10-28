@@ -373,23 +373,22 @@ const Home = () => {
         // Select top 5 cards for display (prioritizing matched images)
         const selectedRepoCards = shuffledRepoCards.slice(0, 5);
         
-        // Spline "Get in Touch" card
+        // "Get in Touch" card with textual type and random image
         const splineCard = {
           color: '#060010',
           title: 'Get in Touch',
-          description: 'Let\'s connect and collaborate',
-          labels: ['Projects'],
-          image: '',
+          description: 'Let\'s connect and collaborate. I\'m always open to discussing new projects, creative ideas, or opportunities to be part of your vision.',
+          labels: [],
+          image: "",
           link: '/contacts',
-          controls: 0,
-          splineUrl: 'https://prod.spline.design/G73ETPu1BKxE3nue/scene.splinecode',
-          type: 'default',
+          controls: 1.1,
+          type: 'textual',
           isProject: false // Not a project
         };
         
-        // Randomly choose position for Spline card (but prefer positions 2-4 for better UX)
+        // Randomly choose position for Get in Touch card (but prefer positions 2-4 for better UX)
         // Positions: 0, 1, 2, 3, 4, 5 (6 total cards)
-        const splinePosition = Math.floor(Math.random() * 4) + 1; // Random position between 1-4
+        const splinePosition = 1; // Random position between 1-4
         
         const finalCards = [
           ...selectedRepoCards.slice(0, splinePosition),
