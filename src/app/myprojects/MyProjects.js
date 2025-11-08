@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import MagicBento from '../../components/MagicBento';
 import CommandLine from '../../components/CommandLine';
+import SocialMediaLinks from '../../components/SocialMediaLinks';
+import StaggeredMenu from '../../components/StaggeredMenu';
 import './MyProjects.css';
+import CurvedLoop from '../../components/CurvedLoop';
+import TextPressure from '../../components/TextPressure';
 import Lanyard from '../../components/Lanyard'
-import { FaGithub, FaLinkedin, FaTwitter, FaInstagram, FaEnvelope, FaDiscord } from 'react-icons/fa';
-import { getHomepageData, getGitHubToken } from '../../firebase/firestoreService';
+import { getGitHubToken } from '../../firebase/firestoreService';
+import { useLoading } from '../../contexts/LoadingContext';
 
 // GitHub service
 const githubService = {
@@ -176,6 +180,7 @@ const githubService = {
 };
 
 const MyProjects = () => {
+  const { markAsReady } = useLoading();
   
   const [sections, setSections] = useState([]); // Start empty, will populate from GitHub
   const [allRepos, setAllRepos] = useState([]); // Store all fetched repos
@@ -185,7 +190,7 @@ const MyProjects = () => {
   const observerRef = useRef(null);
   const lastSectionRef = useRef(null);
   const CARDS_PER_SECTION = 6; // Number of cards per bento grid
-  const GITHUB_USERNAME = 'DevRanbir'; // Replace with your GitHub username
+  const GITHUB_USERNAME = process.env.REACT_APP_GITHUB_USERNAME || 'DevRanbir'; // Get from env or fallback
   
   // Command line state
   const [editMode, setEditMode] = useState(false);
@@ -194,15 +199,7 @@ const MyProjects = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeFilter, setActiveFilter] = useState('all'); // Track active project filter
   const [isMobile, setIsMobile] = useState(false); // Track mobile view
-  
-  // Social links data - will be fetched from Firebase
-  const [socialLinks, setSocialLinks] = useState([
-    { id: 'github', url: 'https://github.com/DevRanbir', icon: <FaGithub /> },
-    { id: 'linkedin', url: 'https://linkedin.com/in/yourname', icon: <FaLinkedin /> },
-    { id: 'instagram', url: 'https://instagram.com/yourname', icon: <FaInstagram /> },
-    { id: 'mail', url: 'mailto:your.email@example.com', icon: <FaEnvelope /> },
-        { id: 'discord', url: 'https://discord.gg/yourserver', icon: <FaDiscord /> }
-  ]);
+  const [socialLinksLoaded, setSocialLinksLoaded] = useState(false); // Track social links loading
   
   // AI Context - Memoized to avoid unnecessary re-renders
   const aiContext = useMemo(() => {
@@ -225,10 +222,9 @@ const MyProjects = () => {
       totalProjects: allProjects.length,
       searchQuery: searchQuery,
       activeFilter: activeFilter,
-      socialLinks: socialLinks,
       pages: ['home', 'projects', 'documents', 'about', 'contacts']
     };
-  }, [filteredCardDataSets, searchQuery, activeFilter, socialLinks]);
+  }, [filteredCardDataSets, searchQuery, activeFilter]);
   
   // Handle AI responses
   const handleAIResponse = useCallback((response) => {
@@ -573,38 +569,13 @@ const MyProjects = () => {
     setSearchQuery(value);
   };
 
-  // Fetch social links from Firebase
+  // Mark page as ready when social links are loaded
   useEffect(() => {
-    const fetchSocialLinks = async () => {
-      try {
-        const data = await getHomepageData();
-        if (data && data.socialLinks) {
-          // Map social links from Firebase with their corresponding icons
-          const iconMap = {
-            github: <FaGithub />,
-            linkedin: <FaLinkedin />,
-            twitter: <FaTwitter />,
-            instagram: <FaInstagram />,
-            mail: <FaEnvelope />,
-            discord: <FaDiscord />
-          };
-          
-          const linksWithIcons = data.socialLinks.map(link => ({
-            ...link,
-            icon: iconMap[link.id] || <FaDiscord /> // Fallback to Discord icon
-          }));
-          
-          setSocialLinks(linksWithIcons);
-          console.log('Social links fetched from Firebase:', linksWithIcons);
-        }
-      } catch (error) {
-        console.error('Error fetching social links:', error);
-        // Keep default social links if fetch fails
-      }
-    };
-    
-    fetchSocialLinks();
-  }, []);
+    if (socialLinksLoaded) {
+      console.log('🎉 MyProjects page: Social links loaded, marking page as ready');
+      markAsReady();
+    }
+  }, [socialLinksLoaded, markAsReady]);
 
   // Clock update effect
   useEffect(() => {
@@ -810,6 +781,7 @@ const MyProjects = () => {
     };
     
     fetchRepositories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load more sections when user scrolls near the bottom
@@ -859,48 +831,10 @@ const MyProjects = () => {
   return (
     <div className="myprojects-page">
       {/* Social Media Links - Vertical Column (Desktop) / Bottom Nav (Mobile) */}
-      <div 
-        className="social-links-container"
-        style={isMobile ? {
-          position: 'fixed',
-          top: '90%',
-          left: '1px',
-          flexDirection: 'row-reverse',
-          flexWrap: 'wrap',
-          width: '100%',
-          justifyContent: 'center',
-          zIndex: 1000,
-          gap: '15px'
-        } : {}}
-      >
-        {socialLinks.map((social) => (
-          <div key={social.id} className="social-link-wrapper">
-            <a 
-              href={social.url} 
-              target="_blank"
-              rel="noopener noreferrer" 
-              className="social-link"
-              aria-label={social.id}
-              style={isMobile ? {
-                width: '36px',
-                height: '36px'
-              } : {
-                paddingTop: '3px',
-              }}
-            >
-              <span style={isMobile ? {
-                width: '20px',
-                height: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              } : {}}>
-                {social.icon}
-              </span>
-            </a>
-          </div>
-        ))}
-      </div>
+      <SocialMediaLinks 
+        isMobile={isMobile} 
+        onLinksLoaded={() => setSocialLinksLoaded(true)}
+      />
       
       <div className="myprojects-scroll-container">
         {/* Command Line Interface with AI */}
@@ -914,6 +848,21 @@ const MyProjects = () => {
         />
 
         <Lanyard position={[2.5, 2, 20]} gravity={[0, -40, 0]} />
+
+        <div style={{ position: 'relative', height: '95px', marginBottom: '2px' }}>
+                    <TextPressure
+                      text={`My‎‎‎‎‎‎‎‎ㅤProjects`}
+                      flex={true}
+                      alpha={false}
+                      stroke={false}
+                      width={false}
+                      weight={true}
+                      italic={true}
+                      textColor="#ffffff"
+                      strokeColor="#ff0000"
+                      minFontSize={120}
+                    />
+                  </div>
         
         {/* Show loading spinner while fetching initial data */}
         {isLoading && sections.length === 0 ? (
@@ -976,6 +925,7 @@ const MyProjects = () => {
             
             {sections.length > 0 ? (
               sections.map((dataSetIndex, index) => (
+                
                 <div 
                   key={`section-${index}-${dataSetIndex}`}
                   className="myprojects-section"
@@ -1012,12 +962,21 @@ const MyProjects = () => {
             
             {!isLoadingMore && !searchQuery && activeFilter === 'all' && sections.length >= cardDataSets.length && cardDataSets.length > 0 && (
               <div className="myprojects-end-message">
-                <p>-End-</p>
                 <p>{allRepos.length} repositories loaded from GitHub</p>
               </div>
             )}
           </>
         )}
+
+        {/* Curved Loop Component */}
+        <CurvedLoop 
+        marqueeText="DevRanbir ✦ End Of The Journey ✦ " 
+        speed={1}
+        curveAmount={-100}
+        direction="right"
+        interactive={true}
+        className="custom-text-style"
+        />
       </div>
       
       {/* Animated Bottom Pattern (Fixed Bottom) */}
@@ -1071,6 +1030,30 @@ const MyProjects = () => {
           </div>
         </div>
 
+      {/* Staggered Menu */}
+      <StaggeredMenu
+        position="right"
+        items={[
+          { label: 'Home', ariaLabel: 'Go to home page', link: '/' },
+          { label: 'Projects', ariaLabel: 'View projects', link: '/projects' },
+          { label: 'Documents', ariaLabel: 'View documents', link: '/documents' },
+          { label: 'About', ariaLabel: 'Learn about me', link: '/about' },
+          { label: 'Contacts', ariaLabel: 'Get in touch', link: '/contacts' }
+        ]}
+        socialItems={[
+          { label: 'GitHub', link: 'https://github.com/DevRanbir' },
+          { label: 'LinkedIn', link: 'https://linkedin.com/in/yourname' },
+          { label: 'Instagram', link: 'https://instagram.com/yourname' }
+        ]}
+        displaySocials={true}
+        displayItemNumbering={true}
+        menuButtonColor="#fff"
+        openMenuButtonColor="#fff"
+        changeMenuColorOnOpen={true}
+        colors={['#858585ff', '#ffffffff']}
+        accentColor="#ffffffff"
+        isFixed={false}
+      />
     </div>
   );
 };

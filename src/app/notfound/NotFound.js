@@ -1,44 +1,25 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Lottie from 'lottie-react';
 import CommandLine from '../../components/CommandLine';
-import { FaGithub, FaLinkedin, FaInstagram, FaEnvelope, FaDiscord } from 'react-icons/fa';
-import { getHomepageData } from '../../firebase/firestoreService';
+import SocialMediaLinks from '../../components/SocialMediaLinks';
+import StaggeredMenu from '../../components/StaggeredMenu';
 import animationData from '../../assets/404-animation.json';
 import './NotFound.css';
+import { useLoading } from '../../contexts/LoadingContext';
 
 const NotFound = () => {
+  const { markAsReady } = useLoading();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isMobile, setIsMobile] = useState(false);
-  const [socialLinks, setSocialLinks] = useState([]);
+  const [socialLinksLoaded, setSocialLinksLoaded] = useState(false);
 
-  // Fetch social links from Firebase
+  // Mark page as ready when social links are loaded
   useEffect(() => {
-    const fetchSocialLinks = async () => {
-      try {
-        const data = await getHomepageData();
-        if (data && data.socialLinks) {
-          const iconMap = {
-            github: <FaGithub />,
-            linkedin: <FaLinkedin />,
-            instagram: <FaInstagram />,
-            mail: <FaEnvelope />,
-            discord: <FaDiscord />
-          };
-          
-          const linksWithIcons = data.socialLinks.map(link => ({
-            ...link,
-            icon: iconMap[link.id] || <FaDiscord />
-          }));
-          
-          setSocialLinks(linksWithIcons);
-        }
-      } catch (error) {
-        console.error('Error fetching social links:', error);
-      }
-    };
-    
-    fetchSocialLinks();
-  }, []);
+    if (socialLinksLoaded) {
+      console.log('🎉 NotFound page: Social links loaded, marking page as ready');
+      markAsReady();
+    }
+  }, [socialLinksLoaded, markAsReady]);
 
   // Clock update effect
   useEffect(() => {
@@ -89,48 +70,10 @@ const NotFound = () => {
   return (
     <div className="notfound-page">
       {/* Social Media Links */}
-      <div 
-        className="social-links-container"
-        style={isMobile ? {
-          position: 'fixed',
-          top: '90%',
-          left: '1px',
-          flexDirection: 'row-reverse',
-          flexWrap: 'wrap',
-          width: '100%',
-          justifyContent: 'center',
-          zIndex: 1000,
-          gap: '15px'
-        } : {}}
-      >
-        {socialLinks.map((social) => (
-          <div key={social.id} className="social-link-wrapper">
-            <a 
-              href={social.url} 
-              target="_blank"
-              rel="noopener noreferrer" 
-              className="social-link"
-              aria-label={social.id}
-              style={isMobile ? {
-                width: '36px',
-                height: '36px'
-              } : {
-                paddingTop: '3px',
-              }}
-            >
-              <span style={isMobile ? {
-                width: '20px',
-                height: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              } : {}}>
-                {social.icon}
-              </span>
-            </a>
-          </div>
-        ))}
-      </div>
+      <SocialMediaLinks 
+        isMobile={isMobile} 
+        onLinksLoaded={() => setSocialLinksLoaded(true)}
+      />
 
       <div className="notfound-scroll-container">
         {/* Command Line Interface */}
@@ -209,6 +152,31 @@ const NotFound = () => {
           <div className="shape shape-4"></div>
         </div>
       </div>
+
+      {/* Staggered Menu */}
+      <StaggeredMenu
+        position="right"
+        items={[
+          { label: 'Home', ariaLabel: 'Go to home page', link: '/' },
+          { label: 'Projects', ariaLabel: 'View projects', link: '/projects' },
+          { label: 'Documents', ariaLabel: 'View documents', link: '/documents' },
+          { label: 'About', ariaLabel: 'Learn about me', link: '/about' },
+          { label: 'Contacts', ariaLabel: 'Get in touch', link: '/contacts' }
+        ]}
+        socialItems={[
+          { label: 'GitHub', link: 'https://github.com/DevRanbir' },
+          { label: 'LinkedIn', link: 'https://linkedin.com/in/yourname' },
+          { label: 'Instagram', link: 'https://instagram.com/yourname' }
+        ]}
+        displaySocials={true}
+        displayItemNumbering={true}
+        menuButtonColor="#fff"
+        openMenuButtonColor="#fff"
+        changeMenuColorOnOpen={true}
+        colors={['#B19EEF', '#8400ff']}
+        accentColor="#8400ff"
+        isFixed={false}
+      />
     </div>
   );
 };

@@ -14,7 +14,7 @@ const ProjectDetail = () => {
   const [error, setError] = useState(null);
   const [activeView, setActiveView] = useState('readme'); // 'readme' or 'thumbnail'
   const [sidebarActive, setSidebarActive] = useState(false); // For mobile sidebar
-  const GITHUB_USERNAME = 'DevRanbir';
+  const GITHUB_USERNAME = process.env.REACT_APP_GITHUB_USERNAME || 'DevRanbir';
 
   // Function to get project image (same logic as MyProjects.js)
   const getProjectImage = (repoName) => {
@@ -133,6 +133,7 @@ const ProjectDetail = () => {
     };
     
     fetchProjectDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectName]);
 
   // Handle mobile sidebar interactions

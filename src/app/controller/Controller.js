@@ -162,7 +162,7 @@ const Controller = () => {
   const [githubProjectStatus, setGithubProjectStatus] = useState([]);
   const [githubSyncResults, setGithubSyncResults] = useState([]);
   const [githubTestResults, setGithubTestResults] = useState([]);
-  const [githubUsername, setGithubUsername] = useState('DevRanbir');
+  const [githubUsername, setGithubUsername] = useState(process.env.REACT_APP_GITHUB_USERNAME || 'DevRanbir');
 
   // Navigation links (reusing social links design)
   const navigationLinks = [

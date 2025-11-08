@@ -1270,7 +1270,7 @@ export const updateGithubSyncMetadata = async (metadata) => {
  * This function respects user edits and only syncs when appropriate
  * RULE: User edits are NEVER overwritten
  */
-export const syncGithubDescriptions = async (username = 'DevRanbir') => {
+export const syncGithubDescriptions = async (username = process.env.REACT_APP_GITHUB_USERNAME || 'DevRanbir') => {
   try {
     console.log('🔄 Starting smart GitHub description sync...');
     
@@ -1526,7 +1526,7 @@ export const markProjectAsUserEdited = async (projectId, description) => {
  * Start automatic GitHub description sync
  * This will run the sync periodically based on GITHUB_SYNC_INTERVAL
  */
-export const startGithubAutoSync = async (username = 'DevRanbir') => {
+export const startGithubAutoSync = async (username = process.env.REACT_APP_GITHUB_USERNAME || 'DevRanbir') => {
   try {
     console.log('🚀 Starting automatic GitHub description sync...');
     
@@ -1640,7 +1640,7 @@ export const getGithubSyncStatus = async () => {
  */
 export const triggerManualGithubSync = async (options = {}) => {
   const {
-    username = 'DevRanbir'
+    username = process.env.REACT_APP_GITHUB_USERNAME || 'DevRanbir'
   } = options;
   
   console.log('🔧 Manual GitHub sync triggered for username:', username);
@@ -1653,7 +1653,7 @@ export const triggerManualGithubSync = async (options = {}) => {
  * Initialize GitHub sync on app startup
  * Call this function when your app starts to begin automatic syncing
  */
-export const initializeGithubSync = async (username = 'DevRanbir', autoStart = true) => {
+export const initializeGithubSync = async (username = process.env.REACT_APP_GITHUB_USERNAME || 'DevRanbir', autoStart = true) => {
   try {
     console.log('🔄 Initializing GitHub sync system...');
     
@@ -1694,7 +1694,7 @@ export const initializeGithubSync = async (username = 'DevRanbir', autoStart = t
  * Test function to verify GitHub sync functionality
  * Use this to test the sync system
  */
-export const testGithubSync = async (username = 'DevRanbir') => {
+export const testGithubSync = async (username = process.env.REACT_APP_GITHUB_USERNAME || 'DevRanbir') => {
   try {
     console.log('🧪 Testing GitHub sync functionality...');
     
@@ -1817,7 +1817,7 @@ export const getProjectSyncStatus = async () => {
 /**
  * Force sync a specific project from GitHub (ignoring user edits)
  */
-export const forceSyncProject = async (projectId, username = 'DevRanbir') => {
+export const forceSyncProject = async (projectId, username = process.env.REACT_APP_GITHUB_USERNAME || 'DevRanbir') => {
   try {
     console.log(`🔧 Force syncing project ${projectId}...`);
     

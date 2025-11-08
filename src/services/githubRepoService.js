@@ -3,10 +3,15 @@ import { db } from '../firebase/config';
 
 // Utility to initialize the GitHub token in Firestore with a fake value (run once, then update in Firestore UI)
 export async function initializeFakeGithubToken() {
-  const fakeToken = 'ghp_FAKE_TOKEN_FOR_SETUP';
+  // Use token from env if available, otherwise use fake token
+  const fakeToken = process.env.REACT_APP_GITHUB_TOKEN || 'ghp_FAKE_TOKEN_FOR_SETUP';
   try {
     await GitHubRepoService.setToken(fakeToken);
-    console.log('Initialized github-token document in Firestore with a fake token. Please update it with your real token in the Firestore console.');
+    if (process.env.REACT_APP_GITHUB_TOKEN) {
+      console.log('Initialized github-token document in Firestore with token from environment.');
+    } else {
+      console.log('Initialized github-token document in Firestore with a fake token. Please update it with your real token in the Firestore console.');
+    }
   } catch (error) {
     console.error('Failed to initialize github-token document:', error);
   }

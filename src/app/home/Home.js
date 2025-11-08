@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import MagicBento from '../../components/MagicBento';
 import CommandLine from '../../components/CommandLine';
+import TextPressure from '../../components/TextPressure';
+import CurvedLoop from '../../components/CurvedLoop';
+import SocialMediaLinks from '../../components/SocialMediaLinks';
+import StaggeredMenu from '../../components/StaggeredMenu';
 import './Home.css';
 import Lanyard from '../../components/Lanyard'
-import { FaGithub, FaLinkedin, FaInstagram, FaEnvelope, FaDiscord } from 'react-icons/fa';
-import { getHomepageData, getGitHubToken } from '../../firebase/firestoreService';
+import { getGitHubToken } from '../../firebase/firestoreService';
 import { loadSplineScript } from '../../utils/splineLoader';
+import { useLoading } from '../../contexts/LoadingContext';
 
 // GitHub service
 const githubService = {
@@ -179,10 +183,18 @@ const githubService = {
 };
 
 const Home = () => {
+  const { markAsReady } = useLoading();
   
   // Basic state for the home page
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isMobile, setIsMobile] = useState(false); // Track mobile view
+  const [socialLinksLoaded, setSocialLinksLoaded] = useState(false); // Track social links loading
+
+  // Random greeting text- selected once on component mount
+  const [greetingText] = useState(() => {
+    const greetings = ['Hello', 'Hola', 'Namaste'];
+    return greetings[Math.floor(Math.random() * greetings.length)];
+  });
   
   // Ref for LaserFlow hover reveal effect
   const scrollContainerRef = useRef(null);
@@ -291,47 +303,19 @@ const Home = () => {
   
   // Store original data for filtering
   const [originalCardData3, setOriginalCardData3] = useState([]);
-  
-  // Social links data - will be fetched from Firebase
-  const [socialLinks, setSocialLinks] = useState([
-  ]);
-
-  // Fetch social links from Firebase
-  useEffect(() => {
-    const fetchSocialLinks = async () => {
-      try {
-        const data = await getHomepageData();
-        if (data && data.socialLinks) {
-          // Map social links from Firebase with their corresponding icons
-          const iconMap = {
-            github: <FaGithub />,
-            linkedin: <FaLinkedin />,
-            instagram: <FaInstagram />,
-            mail: <FaEnvelope />,
-            discord: <FaDiscord />
-          };
-          
-          const linksWithIcons = data.socialLinks.map(link => ({
-            ...link,
-            icon: iconMap[link.id] || <FaDiscord /> // Fallback to Discord icon
-          }));
-          
-          setSocialLinks(linksWithIcons);
-          console.log('Social links fetched from Firebase:', linksWithIcons);
-        }
-      } catch (error) {
-        console.error('Error fetching social links:', error);
-        // Keep default social links if fetch fails
-      }
-    };
-    
-    fetchSocialLinks();
-  }, []);
 
   // Ensure Spline viewer is loaded only once
   useEffect(() => {
     loadSplineScript();
   }, []);
+
+  // Mark page as ready when social links are loaded
+  useEffect(() => {
+    if (socialLinksLoaded) {
+      console.log('🎉 Home page: Social links loaded, marking page as ready');
+      markAsReady();
+    }
+  }, [socialLinksLoaded, markAsReady]);
 
   // Fetch GitHub repositories for cardData2
   useEffect(() => {
@@ -585,10 +569,9 @@ const Home = () => {
       projects: allProjects,
       skills: skills,
       aboutData: aboutData,
-      socialLinks: socialLinks,
       pages: ['home', 'projects', 'documents', 'about', 'contacts']
     };
-  }, [cardData, cardData2, cardData3, socialLinks]);
+  }, [cardData, cardData2, cardData3]);
   
   // Handle AI responses
   const handleAIResponse = useCallback((response) => {
@@ -692,48 +675,10 @@ const Home = () => {
     <div className="home-page">
 
       {/* Social Media Links - Vertical Column (Desktop) / Bottom Nav (Mobile) */}
-      <div 
-        className="social-links-container"
-        style={isMobile ? {
-          position: 'fixed',
-          top: '90%',
-          left: '1px',
-          flexDirection: 'row-reverse',
-          flexWrap: 'wrap',
-          width: '100%',
-          justifyContent: 'center',
-          zIndex: 1000,
-          gap: '15px'
-        } : {}}
-      >
-        {socialLinks.map((social) => (
-          <div key={social.id} className="social-link-wrapper">
-            <a 
-              href={social.url} 
-              target="_blank"
-              rel="noopener noreferrer" 
-              className="social-link"
-              aria-label={social.id}
-              style={isMobile ? {
-                width: '36px',
-                height: '36px'
-              } : {
-                paddingTop: '3px',
-              }}
-            >
-              <span style={isMobile ? {
-                width: '20px',
-                height: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              } : {}}>
-                {social.icon}
-              </span>
-            </a>
-          </div>
-        ))}
-      </div>
+      <SocialMediaLinks 
+        isMobile={isMobile} 
+        onLinksLoaded={() => setSocialLinksLoaded(true)}
+      />
       
       <div className="home-scroll-container" ref={scrollContainerRef}>
         {/* Command Line Interface */}
@@ -744,6 +689,22 @@ const Home = () => {
         />
 
         <Lanyard position={[2.5, 2, 20]} gravity={[0, -40, 0]} />
+
+        {/* Greeting Text with TextPressure Effect */}
+        <div style={{ position: 'relative', height: '95px', marginBottom: '2px' }}>
+          <TextPressure
+            text={`${greetingText}  ‎‎‎‎‎‎‎‎ㅤTraveller`}
+            flex={true}
+            alpha={false}
+            stroke={false}
+            width={false}
+            weight={true}
+            italic={true}
+            textColor="#ffffff"
+            strokeColor="#ff0000"
+            minFontSize={120}
+          />
+        </div>
 
         
         
@@ -793,6 +754,16 @@ const Home = () => {
             />
           </div>
         )}
+
+        {/* Curved Loop Component */}
+        <CurvedLoop 
+        marqueeText="DevRanbir ✦ End Of The Journey ✦ " 
+        speed={3}
+        curveAmount={-100}
+        direction="right"
+        interactive={true}
+        className="custom-text-style"
+        />
       </div>
       
       {/* Animated Bottom Pattern (Fixed Bottom) */}
@@ -844,6 +815,31 @@ const Home = () => {
           })} IST</span>
         </div>
       </div>
+
+      {/* Staggered Menu */}
+      <StaggeredMenu
+        position="right"
+        items={[
+          { label: 'Home', ariaLabel: 'Go to home page', link: '/' },
+          { label: 'Projects', ariaLabel: 'View projects', link: '/projects' },
+          { label: 'Documents', ariaLabel: 'View documents', link: '/documents' },
+          { label: 'About', ariaLabel: 'Learn about me', link: '/about' },
+          { label: 'Contacts', ariaLabel: 'Get in touch', link: '/contacts' }
+        ]}
+        socialItems={[
+          { label: 'GitHub', link: 'https://github.com/DevRanbir' },
+          { label: 'LinkedIn', link: 'https://linkedin.com/in/yourname' },
+          { label: 'Instagram', link: 'https://instagram.com/yourname' }
+        ]}
+        displaySocials={true}
+        displayItemNumbering={true}
+        menuButtonColor="#fff"
+        openMenuButtonColor="#fff"
+        changeMenuColorOnOpen={true}
+        colors={['#858585ff', '#ffffffff']}
+        accentColor="#ffffffff"
+        isFixed={false}
+      />
     </div>
   );
 };

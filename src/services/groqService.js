@@ -170,31 +170,51 @@ export const createSystemPrompt = (context = {}) => {
     socialLinks = [], 
     currentPage = 'home',
     searchQuery = '',
-    aboutData = null,
-    readme = null,
     skills = [],
-    documentDescriptions = '',
-    documentTypes = [],
-    totalDocuments = 0,
-    filteredCount = 0,
-    selectedFilter = 'all'
+    authorDescription = '',
+    authorSkills = [],
+    aboutData = ''
   } = context || {};
 
   const projectCount = Array.isArray(projects) ? projects.length : 0;
   const documentCount = Array.isArray(documents) ? documents.length : 0;
-  const socialLinkNames = Array.isArray(socialLinks) 
-    ? socialLinks.map(s => s.id || s.name).filter(Boolean).join(', ') 
-    : 'GitHub, LinkedIn, etc.';
+  
+  // Build complete project list with details
+  let projectsList = '';
+  if (Array.isArray(projects) && projects.length > 0) {
+    projectsList = projects.map((p, i) => {
+      const tech = (p.technologies || p.tags || []).join(', ') || 'Not specified';
+      const stars = p.stars ? ` ⭐${p.stars}` : '';
+      const source = p.source === 'github' ? ' [GitHub]' : ' [Firebase]';
+      const dateInfo = p.created_at ? ` | Created: ${new Date(p.created_at).toLocaleDateString()}` : '';
+      const updateInfo = p.updated_at ? ` | Updated: ${new Date(p.updated_at).toLocaleDateString()}` : '';
+      return `${i + 1}. ${p.name || p.title}${source}${stars}: ${p.description || 'No description'} | Tech: ${tech}${dateInfo}${updateInfo}`;
+    }).join('\n');
+  }
 
-  // Extract skills/technologies from projects if available
+  // Build complete social links list
+  let socialLinksList = '';
+  if (Array.isArray(socialLinks) && socialLinks.length > 0) {
+    socialLinksList = socialLinks.map(s => {
+      return `${s.id || s.name}: ${s.url || s.link}`;
+    }).join('\n');
+  }
+
+  // Build complete documents list
+  let documentsList = '';
+  if (Array.isArray(documents) && documents.length > 0) {
+    documentsList = documents.map((d, i) => {
+      return `${i + 1}. ${d.title || d.name}: ${d.description || 'No description'}`;
+    }).join('\n');
+  }
+
+  // Extract skills/technologies from projects
   const technologies = new Set();
   
-  // Add skills from explicit skills array (from context)
   if (Array.isArray(skills)) {
     skills.forEach(skill => technologies.add(skill));
   }
   
-  // Add technologies from projects
   if (Array.isArray(projects)) {
     projects.forEach(project => {
       if (Array.isArray(project.technologies)) {
@@ -206,155 +226,123 @@ export const createSystemPrompt = (context = {}) => {
     });
   }
   const skillsList = Array.from(technologies).join(', ');
-  
-  // Build page-specific content
-  let pageContent = '';
-  
-  if (currentPage === 'documents') {
-    // Documents page specific content
-    const typesList = Array.isArray(documentTypes) 
-      ? documentTypes.map(t => `${t.label} (${t.count})`).join(', ')
-      : '';
-    
-    pageContent = `
-CURRENT PAGE: Documents
-- Total Documents: ${totalDocuments}
-- Currently Showing: ${filteredCount} documents
-- Filter: ${selectedFilter === 'all' ? 'All Documents' : selectedFilter.toUpperCase()}
-- Document Types Available: ${typesList}
-- Technologies/Skills: ${skillsList || 'React, JavaScript, Python, Node.js, HTML/CSS'}
 
-DOCUMENTS ON THIS PAGE:
-${documentDescriptions || 'No documents available'}
-
-IMPORTANT: This is the DOCUMENTS page, NOT the projects page. When asked about "projects", clarify that this is the documents page and offer to navigate to the projects page if needed.`;
-  } else {
-    // Projects/other pages content
-    let projectDetails = '';
-    if (Array.isArray(projects) && projects.length > 0) {
-      projectDetails = '\n\nPROJECTS ON THIS PAGE:\n' + projects.slice(0, 10).map((p, i) => 
-        `${i + 1}. ${p.name || p.title}: ${p.description || 'No description'} [Tech: ${(p.technologies || p.tags || []).join(', ') || 'Not specified'}]`
-      ).join('\n');
-    }
-    
-    pageContent = `
-CURRENT PAGE: ${currentPage}
-- Projects visible: ${projectCount} projects
-- Technologies/Skills on this page: ${skillsList || 'React, JavaScript, Python, Node.js, HTML/CSS'}
-- Documents: ${documentCount} documents
-${searchQuery ? `- Current Search: "${searchQuery}"` : ''}
-${projectDetails}`;
+  // Build author information
+  let authorInfo = '';
+  if (authorDescription) {
+    authorInfo = `\n\nABOUT RANBIR:\n${authorDescription}`;
+  } else if (aboutData) {
+    authorInfo = `\n\nABOUT RANBIR:\n${aboutData}`;
   }
   
-  // Build about/bio information if available
-  let aboutInfo = '';
-  if (aboutData) {
-    aboutInfo = `\n\nABOUT RANBIR:\n${aboutData}`;
-  } else if (readme) {
-    aboutInfo = `\n\nABOUT RANBIR:\n${readme.substring(0, 500)}...`;
+  if (authorSkills && authorSkills.length > 0) {
+    authorInfo += `\n\nAUTHOR SKILLS: ${authorSkills.join(', ')}`;
   }
 
-  return {
-    role: "system",
-    content: `You are an AI assistant for Ranbir's portfolio website. You help visitors understand Ranbir's work, skills, and experience based on the CURRENT PAGE CONTENT.
+  const systemContent = `You are an AI assistant for Ranbir's portfolio website. You have access to real-time data fetched from GitHub and Firebase.
 
-CRITICAL: You are currently on the "${currentPage}" page. Answer questions based on what's ACTUALLY visible on THIS page.
+IMPORTANT INSTRUCTIONS:
+- You have COMPLETE ACCESS to all projects, documents, and data fetched from GitHub and Firebase
+- When asked about counts (how many projects, documents, etc.), use the EXACT numbers from the data below
+- When listing items, use the ACTUAL data provided below, not what's "visible on page"
+- Be specific and accurate with numbers and details
+- If asked about GitHub, provide the exact GitHub profile URL if available in social links
 
-IMPORTANT RULES:
-1. DO NOT navigate to other pages automatically - Only navigate when user explicitly says "go to", "open", "navigate to", or "take me to"
-2. When asked about skills/technologies, answer from THIS PAGE's data
-3. Stay on current page unless explicitly asked to navigate
-4. If on documents page and asked about projects, clarify you're on the documents page
+=== COMPLETE DATA FROM GITHUB & FIREBASE ===
 
-${pageContent}
-${aboutInfo}
+TOTAL PROJECTS: ${projectCount}
+All Projects (from GitHub + Firebase):
+${projectsList || 'No projects found'}
 
-Social Links: ${socialLinkNames}
+TOTAL DOCUMENTS: ${documentCount}
+All Documents:
+${documentsList || 'No documents found'}
 
-CAPABILITIES:
-- Answer questions about Ranbir based on CURRENT PAGE content
-- Filter documents/projects by type when asked
-- Explain content visible on THIS page
-- Navigate to other pages ONLY when explicitly requested
-- Search and filter content on the current page
-- Clear/reset filters when requested
+SOCIAL LINKS:
+${socialLinksList || 'No social links found'}
+
+TECHNOLOGIES/SKILLS: ${skillsList || 'Not available'}
+${authorInfo}
+
+CURRENT CONTEXT:
+- Page: ${currentPage}
+- Search Query: ${searchQuery || 'None'}
+
+=== END OF DATA ===
+
+IMPORTANT RULES FOR ANSWERING:
+1. GREETINGS: If user says "hi", "hello", "hey", "howdy", or similar greetings, respond warmly and briefly introduce yourself. DO NOT treat greetings as search queries!
+2. AUTHOR QUESTIONS: When asked "who is ranbir" or similar, use the "ABOUT RANBIR" section above - this contains complete information from Firebase
+3. COUNTS: Always use exact numbers from "TOTAL PROJECTS" and "TOTAL DOCUMENTS" above
+4. LISTINGS: When listing projects/documents, use the numbered lists above
+5. GITHUB: Extract GitHub URL from SOCIAL LINKS section
+6. LATEST/RECENT PROJECTS: When asked about "latest", "newest", "most recent" projects, look at the "Updated" or "Created" dates in the project list. GitHub projects include these timestamps - use them to identify the most recent project.
+7. DON'T say "no information available" - ALL data is provided above in the relevant sections
+
+When answering:
+1. Always use the exact counts from the data above
+2. Reference specific projects/documents by name from the lists
+3. If listing multiple items, show them clearly with numbers
+4. For GitHub profile questions, extract the GitHub URL from social links
+5. For "latest project" questions, check the Updated/Created dates and identify the most recently updated project from GitHub
+5. Be precise and don't say "visible on this page" - you have ALL the data
 
 RESPONSE FORMAT:
-For filtering by SPECIFIC technology (when user asks to "show", "filter", "find" projects by a technology):
+For greetings (hi, hello, hey, etc.):
+{
+  "action": "explain",
+  "message": "Hello! 👋 I'm Ranbir's AI assistant. I can help you explore his ${projectCount} projects, answer questions about his work, or navigate through the portfolio. What would you like to know?"
+}
+
+For filtering by SPECIFIC technology:
 {
   "action": "filter",
-  "target": "specific_technology_name",
+  "target": "technology_name",
   "message": "Filtering projects that use [technology]..."
 }
-IMPORTANT: Use the EXACT technology name (e.g., "React", "JavaScript", "Python") in target, NOT generic words like "skills" or "projects"
 
-For searching by any term:
+For searching by term:
 {
   "action": "search",
   "target": "search_term",
   "message": "Searching for [search_term]..."
 }
 
-For clearing/resetting filters (when user wants to see ALL projects again):
+For clearing filters:
 {
   "action": "filter",
   "target": "",
   "message": "Showing all projects..."
 }
 
-For navigation (ONLY when explicitly requested):
+For navigation (only when explicitly requested):
 {
   "action": "navigate",
   "target": "page_name",
   "message": "Taking you to the [page] page..."
 }
 
-For information/listing queries (when user asks "what", "which", "list" WITHOUT wanting to filter):
-Provide a conversational answer based on what's on THIS page. DO NOT use filter action for general questions.
+For information queries (counts, lists, URLs):
 {
   "action": "explain",
-  "message": "Based on the projects visible on this page, here are [number] projects: [list them]. Technologies used include: [list technologies]."
+  "message": "[Answer based on the COMPLETE DATA above. Use exact counts and list items from the numbered lists.]"
 }
 
-CRITICAL RULES FOR DETERMINING ACTION:
-- If user mentions a SPECIFIC technology name (React, Python, JavaScript, Node.js, etc.) → ALWAYS USE "filter" action
-- Single word that matches a technology (e.g., "react", "python") → ALWAYS USE "filter" action
-- If user says "find [specific project name]" → USE "search" action with project name as target
-- If user says "show [specific project]" or "open [specific project]" → USE "search" action with project name as target
-- "show [tech]", "filter [tech]", "[tech] projects" → USE "filter" action with tech name as target
-- "show me react" or "react projects" or just "react" → USE "filter" action with "React" as target
-- "what skills", "list projects", "what technologies" (general questions) → USE "explain" action ONLY if no specific tech mentioned
-- "all projects", "show all", "clear filter", "reset", "remove filter" → USE "filter" action with empty target ""
-- "filter out projects", "show only projects", "projects only" → USE "filter" action with target "projects"
-- If user explicitly says "go to", "navigate to", "take me to" → USE "navigate" action
+CRITICAL RULES:
+- GREETINGS (hi, hello, hey, howdy, etc.) → USE "explain" action with friendly greeting response
+- "who is ranbir", "about ranbir", "tell me about" → USE "explain" with info from ABOUT RANBIR section
+- Specific technology mentioned → USE "filter" action
+- "find [project name]" → USE "search" action
+- "show all", "clear filter" → USE "filter" with empty target
+- "list projects", "how many projects", "what skills" → USE "explain" action
+- "GitHub URL", "GitHub profile" → USE "explain" and extract from SOCIAL LINKS
+- "go to", "navigate to" → USE "navigate" action
 
-EXAMPLES:
-✅ "remove filter" → action: "filter", target: "", message: "Showing all projects..."
-✅ "clear filters" → action: "filter", target: "", message: "Showing all projects..."
-✅ "show all" → action: "filter", target: "", message: "Showing all projects..."
-✅ "filter out projects" → action: "filter", target: "projects", message: "Showing only project cards..."
-✅ "show only projects" → action: "filter", target: "projects", message: "Showing only project cards..."
-✅ "projects only" → action: "filter", target: "projects", message: "Filtering to show only projects..."
-✅ "find speechviber" → action: "search", target: "speechviber", message: "Searching for speechviber..."
-✅ "find periodic table" → action: "search", target: "periodic table", message: "Searching for periodic table..."
-✅ "show me repoviewer" → action: "search", target: "repoviewer", message: "Searching for repoviewer..."
-✅ "open chocolava" → action: "search", target: "chocolava", message: "Searching for chocolava..."
-✅ "react" → action: "filter", target: "React", message: "Filtering projects that use React..."
-✅ "python" → action: "filter", target: "Python", message: "Filtering projects that use Python..."
-✅ "show me react projects" → action: "filter", target: "React", message: "Filtering projects that use React..."
-✅ "filter by python" → action: "filter", target: "Python", message: "Filtering projects that use Python..."
-✅ "javascript projects" → action: "filter", target: "JavaScript", message: "Filtering projects that use JavaScript..."
-✅ "node.js" → action: "filter", target: "Node.js", message: "Filtering projects that use Node.js..."
-✅ "what skills does ranbir have?" → action: "explain", message lists all visible technologies and projects
-✅ "list projects" (no specific tech) → action: "explain", message lists all visible projects
-✅ "tell me about ranbir" → action: "explain", message uses visible project/about data
-✅ "go to about page" → action: "navigate", target: "about"
-✅ "clear filters" → action: "filter", target: "", message: "Showing all projects..."
-✅ "show all projects" → action: "filter", target: "", message: "Showing all projects..."
-✅ "all" → action: "filter", target: "", message: "Showing all projects..."
-❌ "show me skills" → DON'T filter, use "explain" to list skills from visible projects
+Remember: You have ${projectCount} total projects and ${documentCount} documents. Always use these exact numbers!`;
 
-Remember: You can see ${projectCount} projects on this page. When a specific technology is mentioned, ALWAYS filter by it! When a specific project is mentioned, ALWAYS search for it!`
+  return {
+    role: "system",
+    content: systemContent
   };
 };
 

@@ -12,8 +12,12 @@ import Controller from './app/controller/Controller';
 import NotFound from './app/notfound/NotFound';
 import Loading from './app/loading/Loading';
 import LoadingOverlay from './components/LoadingOverlay';
+import { LoadingProvider, useLoading } from './contexts/LoadingContext';
 import './App.css';
 import './components/CommandLine.css';
+
+// Staggered menu (chat) - show on all pages
+import StaggeredMenu from './components/StaggeredMenu';
 
 // Import chat cleanup utility (automatically starts cleanup)
 import './utils/chatCleanup';
@@ -24,19 +28,33 @@ import { initializeGitHubSync } from './services/githubSyncService';
 // Route loader component
 function RouteLoader({ children }) {
   const location = useLocation();
-  const [isLoading, setIsLoading] = useState(false);
+  const { isReady, resetReady } = useLoading();
+  const [isLoading, setIsLoading] = useState(true);
+  const [minLoadingTime, setMinLoadingTime] = useState(false);
 
   useEffect(() => {
-    // Show loading overlay when route changes
+    // Reset ready state when route changes
+    resetReady();
     setIsLoading(true);
+    setMinLoadingTime(false);
     
-    // Hide loading overlay after a short delay (simulating route load)
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1500); // Adjust duration as needed
+    // Minimum loading time to prevent flash (1.5 seconds)
+    const minTimer = setTimeout(() => {
+      setMinLoadingTime(true);
+    }, 1500);
 
-    return () => clearTimeout(timer);
-  }, [location.pathname]);
+    return () => clearTimeout(minTimer);
+  }, [location.pathname, resetReady]);
+
+  // Hide loading when both conditions are met:
+  // 1. Minimum loading time has passed
+  // 2. Content is ready (social links loaded, etc.)
+  useEffect(() => {
+    if (minLoadingTime && isReady) {
+      console.log('✅ Both conditions met, hiding loader');
+      setIsLoading(false);
+    }
+  }, [minLoadingTime, isReady]);
 
   return (
     <>
@@ -136,14 +154,15 @@ function App() {
   return (
     <div className="App">
       <Router>
-        <RouteLoader>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/home" element={<Homepage />} />
-            <Route path="/documents" element={<Documents />} />
-            <Route path="/projects" element={<MyProjects />} />
-            <Route path="/myprojects" element={<Projects />} />
-            <Route path="/projects/:projectName" element={<ProjectDetail />} />
+        <LoadingProvider>
+          <RouteLoader>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/home" element={<Homepage />} />
+              <Route path="/documents" element={<Documents />} />
+              <Route path="/projects" element={<MyProjects />} />
+              <Route path="/myprojects" element={<Projects />} />
+              <Route path="/projects/:projectName" element={<ProjectDetail />} />
             <Route path="/about" element={<About />} />
             <Route path="/contacts" element={<Contacts />} />
             <Route path="/controller" element={<Controller />} />
@@ -152,7 +171,10 @@ function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </RouteLoader>
+      </LoadingProvider>
       </Router>
+      {/* Render chat button/menu so it's available on every page */}
+      <StaggeredMenu />
     </div>
   );
 }

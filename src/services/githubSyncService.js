@@ -30,7 +30,7 @@ import {
 class GitHubSyncService {
   constructor() {
     this.isInitialized = false;
-    this.username = 'DevRanbir'; // Default GitHub username
+    this.username = process.env.REACT_APP_GITHUB_USERNAME || 'DevRanbir'; // Get from env or fallback
     this.syncIntervalId = null;
     this.lastSyncTime = null;
     this.syncInProgress = false;
@@ -40,7 +40,7 @@ class GitHubSyncService {
    * Initialize the GitHub sync service
    * Call this when your app starts
    */
-  async initialize(username = 'DevRanbir', autoStart = true) {
+  async initialize(username = process.env.REACT_APP_GITHUB_USERNAME || 'DevRanbir', autoStart = true) {
     try {
       console.log('🚀 Initializing GitHub Sync Service...');
       
@@ -336,7 +336,7 @@ export { GitHubSyncService };
  * Convenience function to initialize the service
  * Call this in your main App.js or index.js file
  */
-export const initializeGitHubSync = async (username = 'DevRanbir', autoStart = true) => {
+export const initializeGitHubSync = async (username = process.env.REACT_APP_GITHUB_USERNAME || 'DevRanbir', autoStart = true) => {
   try {
     return await githubSyncService.initialize(username, autoStart);
   } catch (error) {
