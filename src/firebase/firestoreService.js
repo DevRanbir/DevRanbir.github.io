@@ -636,7 +636,7 @@ const getChatDocRef = (userName, userId) => {
 };
 
 // Send a message to chat (creates or updates user's chat document)
-export const sendChatMessage = async (message, userId, userName = null) => {
+export const sendChatMessage = async (message, userId, userName = null, chatContext = null) => {
   try {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + (2 * 60 * 60 * 1000)); // 2 hours from now
@@ -654,8 +654,16 @@ export const sendChatMessage = async (message, userId, userName = null) => {
       sender: 'user',
       message: message.trim(),
       timestamp: now,
-      expiresAt: expiresAt
+      expiresAt: expiresAt,
+      // Include chat context for AI to remember conversation
+      chatContext: chatContext || []
     };
+    
+    console.log('💬 Sending message with context:', {
+      message: message.trim(),
+      contextLength: chatContext ? chatContext.length : 0,
+      userName: userName
+    });
     
     if (chatDoc.exists()) {
       // Update existing chat document
@@ -667,7 +675,9 @@ export const sendChatMessage = async (message, userId, userName = null) => {
       // Add new message to the messages map
       await updateDoc(chatDocRef, {
         [`messages.${messageId}`]: newMessage,
-        lastUpdated: now
+        lastUpdated: now,
+        // Store conversation context at document level for easier access
+        conversationContext: chatContext || []
       });
       
       console.log('✅ Message added to existing chat for user:', userName, 'message ID:', messageId);
@@ -681,6 +691,7 @@ export const sendChatMessage = async (message, userId, userName = null) => {
         supportAgentName: 'Support Team',
         createdAt: now,
         lastUpdated: now,
+        conversationContext: chatContext || [], // Store context for AI
         messages: {
           [messageId]: newMessage
         }

@@ -25,6 +25,9 @@ import './utils/chatCleanup';
 // Import GitHub sync service
 import { initializeGitHubSync } from './services/githubSyncService';
 
+// Import Firebase service
+import { getHomepageData } from './firebase/firestoreService';
+
 // Route loader component
 function RouteLoader({ children }) {
   const location = useLocation();
@@ -65,6 +68,32 @@ function RouteLoader({ children }) {
 }
 
 function App() {
+  const [socialLinks, setSocialLinks] = useState([]);
+
+  // Fetch social links from Firebase
+  useEffect(() => {
+    const fetchSocialLinks = async () => {
+      try {
+        const homepageData = await getHomepageData();
+        if (homepageData && homepageData.socialLinks) {
+          // Randomize and select 3 social links, map to correct format
+          const randomLinks = [...homepageData.socialLinks]
+            .sort(() => 0.5 - Math.random())
+            .slice(0, 3)
+            .map(social => ({
+              label: social.id,    // Use id as the label (e.g., "GitHub", "LinkedIn")
+              link: social.url     // Use url as the link
+            }));
+          setSocialLinks(randomLinks);
+        }
+      } catch (error) {
+        console.error('Error fetching social links:', error);
+      }
+    };
+
+    fetchSocialLinks();
+  }, []);
+
   useEffect(() => {
     // Initialize GitHub sync service when app starts
     const initializeSync = async () => {
@@ -174,7 +203,7 @@ function App() {
       </LoadingProvider>
       </Router>
       {/* Render chat button/menu so it's available on every page */}
-      <StaggeredMenu />
+      <StaggeredMenu socialItems={socialLinks} />
     </div>
   );
 }

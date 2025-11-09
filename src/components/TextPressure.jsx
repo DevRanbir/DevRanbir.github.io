@@ -186,6 +186,27 @@ const TextPressure = ({
         .text-pressure-title {
           color: ${textColor};
         }
+
+        /* Mobile responsive styles */
+        @media (max-width: 768px) {
+          .text-pressure-title {
+            white-space: normal !important;
+            word-break: break-all;
+            overflow-wrap: break-word;
+            text-align: center;
+            padding: 0 10px;
+            box-sizing: border-box;
+            height: 45px !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .text-pressure-title {
+            font-size: ${Math.min(fontSize, 40)}px !important;
+            line-height: 1.2 !important;
+            transform: none !important;
+          }
+        }
       `}</style>
 
       <h1
@@ -203,7 +224,9 @@ const TextPressure = ({
           userSelect: 'none',
           whiteSpace: 'nowrap',
           fontWeight: 100,
-          width: '100%'
+          width: '100%',
+          maxWidth: '100%',
+          overflow: 'hidden'
         }}
       >
         {chars.map((char, i) => (

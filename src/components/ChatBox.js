@@ -20,11 +20,98 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
   const unsubscribeRef = useRef(null);
   const cleanupIntervalRef = useRef(null);
 
+  // Save messages to localStorage whenever messages change
+  useEffect(() => {
+    if (messages.length > 0 && userId) {
+      const chatData = {
+        messages: messages,
+        userId: userId,
+        userName: userName,
+        timestamp: Date.now()
+      };
+      try {
+        const chatKey = `chatHistory_${userId}`;
+        localStorage.setItem(chatKey, JSON.stringify(chatData));
+        console.log('💾 Chat history saved to localStorage:', messages.length, 'messages');
+        
+        // Also save the raw user key for consistency
+        localStorage.setItem('chatUserId', userId);
+        localStorage.setItem('chatUserName', userName);
+        
+        // Force a browser storage event to ensure persistence
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: chatKey,
+          newValue: JSON.stringify(chatData)
+        }));
+        
+      } catch (error) {
+        console.error('❌ Error saving chat history:', error);
+      }
+    }
+  }, [messages, userId, userName]);
+
+  // Force save chat history to localStorage
+  const forceSaveChatHistory = useCallback((messagesToSave = messages) => {
+    if (userId && messagesToSave.length > 0) {
+      try {
+        const chatData = {
+          messages: messagesToSave,
+          userId: userId,
+          userName: userName,
+          timestamp: Date.now()
+        };
+        
+        const chatKey = `chatHistory_${userId}`;
+        localStorage.setItem(chatKey, JSON.stringify(chatData));
+        localStorage.setItem('chatUserId', userId);
+        localStorage.setItem('chatUserName', userName);
+        
+        console.log('🔒 Force saved chat history:', messagesToSave.length, 'messages for user:', userName);
+        return true;
+      } catch (error) {
+        console.error('❌ Error force saving chat history:', error);
+        return false;
+      }
+    }
+    return false;
+  }, [messages, userId, userName]);
+
+  // Load chat history from localStorage
+  const loadChatHistory = useCallback((userIdToLoad) => {
+    try {
+      const savedChat = localStorage.getItem(`chatHistory_${userIdToLoad}`);
+      if (savedChat) {
+        const chatData = JSON.parse(savedChat);
+        // Check if chat history is not too old (e.g., within 7 days)
+        const daysSinceLastChat = (Date.now() - chatData.timestamp) / (1000 * 60 * 60 * 24);
+        
+        if (daysSinceLastChat <= 7 && chatData.messages) {
+          console.log('📜 Loading chat history from localStorage:', chatData.messages.length, 'messages');
+          setMessages(chatData.messages);
+          return true;
+        } else {
+          console.log('🗑️ Chat history too old, clearing...');
+          localStorage.removeItem(`chatHistory_${userIdToLoad}`);
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Error loading chat history:', error);
+      return false;
+    }
+  }, []);
+
   // Define connectToChat function with useCallback to prevent unnecessary re-renders
   const connectToChat = useCallback((userIdToUse, userNameToUse, isNewUser = false) => {
     try {
       setIsLoading(true);
       console.log('🔌 Connecting to chat for user:', userNameToUse, isNewUser ? '(New User)' : '(Existing User)');
+      
+      // If this is NOT a new user, try to load chat history first
+      let hasHistory = false;
+      if (!isNewUser) {
+        hasHistory = loadChatHistory(userIdToUse);
+      }
       
       // If this is a new user (reset), clear messages immediately
       if (isNewUser) {
@@ -36,13 +123,35 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
       const unsubscribe = subscribeToChatMessages(userIdToUse, (newMessages) => {
         console.log('📨 ChatBox received messages update:', newMessages);
         
-        // Always update with the latest messages from Firebase
-        setMessages(newMessages);
+        // Merge new messages with existing chat history
+        setMessages(prevMessages => {
+          const existingIds = new Set(prevMessages.map(msg => msg.id));
+          const newUniqueMessages = newMessages.filter(msg => !existingIds.has(msg.id));
+          
+          if (newUniqueMessages.length > 0) {
+            console.log('📥 Adding', newUniqueMessages.length, 'new messages to existing history');
+            const updatedMessages = [...prevMessages, ...newUniqueMessages].sort((a, b) => {
+              const timeA = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp);
+              const timeB = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp);
+              return timeA - timeB;
+            });
+            
+            // Force save the updated messages immediately
+            setTimeout(() => {
+              forceSaveChatHistory(updatedMessages);
+            }, 100);
+            
+            return updatedMessages;
+          }
+          
+          return prevMessages;
+        });
+        
         setIsConnected(true);
         setIsLoading(false);
         
-        // Add welcome message only if no real messages exist and this is a new user
-        if (isNewUser && newMessages.length === 0) {
+        // Add welcome message only if no messages exist and this is a new user
+        if (isNewUser && newMessages.length === 0 && !hasHistory) {
           console.log('👋 Adding welcome message for new user with no messages');
           setMessages([{
             id: 'welcome',
@@ -60,7 +169,7 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
       console.error('Error connecting to chat:', error);
       setIsLoading(false);
     }
-  }, []);
+  }, [loadChatHistory, forceSaveChatHistory]);
 
   // Initialize chat
   useEffect(() => {
@@ -72,12 +181,39 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
     const storedUserName = localStorage.getItem('chatUserName');
     
     if (storedUserId && storedUserName) {
+      console.log('🔄 Restoring previous chat session for:', storedUserName);
+      console.log('💾 Checking for stored chat history...');
+      
       setUserId(storedUserId);
       setUserName(storedUserName);
       setShowUserSetup(false);
+      
+      // Load chat history immediately and force restore
+      const hasHistory = loadChatHistory(storedUserId);
+      if (hasHistory) {
+        console.log('✅ Chat history restored from localStorage');
+        
+        // Also force restore from localStorage in case of any issues
+        setTimeout(() => {
+          try {
+            const savedChat = localStorage.getItem(`chatHistory_${storedUserId}`);
+            if (savedChat) {
+              const chatData = JSON.parse(savedChat);
+              if (chatData.messages && chatData.messages.length > 0) {
+                setMessages(chatData.messages);
+                console.log('🔄 Double-check: Restored', chatData.messages.length, 'messages');
+              }
+            }
+          } catch (error) {
+            console.error('Error in double-check restore:', error);
+          }
+        }, 500);
+      }
+      
+      // Connect to live updates
       connectToChat(storedUserId, storedUserName, false); // false = existing user
     }
-  }, [connectToChat]);
+  }, [connectToChat, loadChatHistory]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -139,7 +275,17 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
 
     try {
       console.log('📤 Sending message:', messageToSend, 'for user:', userId, userName);
-      const result = await sendChatMessage(messageToSend, userId, userName);
+      
+      // Include chat history context for the AI to remember previous conversation
+      const chatContext = messages.map(msg => ({
+        role: msg.sender === 'support' ? 'assistant' : 'user',
+        content: msg.message,
+        timestamp: msg.timestamp
+      }));
+      
+      console.log('📚 Including chat context:', chatContext.length, 'previous messages');
+      
+      const result = await sendChatMessage(messageToSend, userId, userName, chatContext);
       console.log('✅ Message sent successfully:', result);
     } catch (error) {
       console.error('❌ Error sending message:', error);
@@ -179,8 +325,11 @@ const ChatBox = ({ isFullScreen, onToggleFullScreen, editMode }) => {
           unsubscribeRef.current = null;
         }
         
-        // DO NOT delete the chat document from Firebase - just clear local state
-        // The old chat will remain in Firebase but user will start completely fresh
+        // Clear chat history from localStorage
+        if (userId) {
+          localStorage.removeItem(`chatHistory_${userId}`);
+          console.log('🗑️ Cleared chat history from localStorage');
+        }
         
         // Clean up local state and storage completely
         localStorage.removeItem('chatUserId');

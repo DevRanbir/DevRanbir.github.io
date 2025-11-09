@@ -214,7 +214,6 @@ export const StaggeredMenu = ({
   displaySocials = true,
   displayItemNumbering = true,
   className,
-  logoUrl = '/pic3.png',
   menuButtonColor = '#fff',
   openMenuButtonColor = '#fff',
   accentColor = '#ffffffff',
@@ -232,7 +231,9 @@ export const StaggeredMenu = ({
   const plusVRef = useRef(null);
   const iconRef = useRef(null);
   const textInnerRef = useRef(null);
+  // eslint-disable-next-line no-unused-vars
   const textWrapRef = useRef(null);
+  // eslint-disable-next-line no-unused-vars
   const [textLines, setTextLines] = useState(['Chat', 'Close']);
 
   // AI-powered chat state
@@ -562,8 +563,18 @@ What would you like to know?`,
 
     const tl = gsap.timeline({ paused: true });
 
+    // Fade in the prelayers container first
+    const preContainer = preLayersRef.current;
+    if (preContainer) {
+      tl.to(preContainer, {
+        opacity: 1,
+        duration: 0.6,
+        ease: 'power2.out'
+      }, 0);
+    }
+
     layerStates.forEach((ls, i) => {
-      tl.fromTo(ls.el, { xPercent: ls.start }, { xPercent: 0, duration: 0.5, ease: 'power4.out' }, i * 0.07);
+      tl.fromTo(ls.el, { xPercent: ls.start }, { xPercent: 0, duration: 0.6, ease: 'power3.out' }, i * 0.08);
     });
     const lastTime = layerStates.length ? (layerStates.length - 1) * 0.07 : 0;
     const panelInsertTime = lastTime + (layerStates.length ? 0.08 : 0);
@@ -686,21 +697,35 @@ What would you like to know?`,
   }, [buildOpenTimeline]);
 
   const playClose = useCallback(() => {
+    console.log('🔄 Starting slow close animation...');
     openTlRef.current?.kill();
     openTlRef.current = null;
     itemEntranceTweenRef.current?.kill();
 
     const panel = panelRef.current;
     const layers = preLayerElsRef.current;
+    const preContainer = preLayersRef.current;
     if (!panel) return;
+
+    // First fade out prelayers slowly and smoothly
+    if (preContainer) {
+      console.log('💫 Fading out prelayers over 1.2s');
+      gsap.to(preContainer, {
+        opacity: 0,
+        duration: 1.2,
+        ease: 'sine.inOut',
+        overwrite: 'auto'
+      });
+    }
 
     const all = [...layers, panel];
     closeTweenRef.current?.kill();
     const offscreen = position === 'left' ? -100 : 100;
+    console.log('📤 Sliding out panel and layers over 1.2s');
     closeTweenRef.current = gsap.to(all, {
       xPercent: offscreen,
-      duration: 0.32,
-      ease: 'power3.in',
+      duration: 1.2,
+      ease: 'sine.inOut',
       overwrite: 'auto',
       onComplete: () => {
         const itemEls = Array.from(panel.querySelectorAll('.sm-panel-itemLabel'));
@@ -825,16 +850,6 @@ What would you like to know?`,
         })()}
       </div>
       <header className="staggered-menu-header" aria-label="Main navigation header">
-        <div className="sm-logo" aria-label="Logo">
-          <img
-            src={logoUrl || '/logo.png'}
-            alt="Logo"
-            className="sm-logo-img"
-            draggable={false}
-            width={110}
-            height={24}
-          />
-        </div>
         <button
           ref={toggleBtnRef}
           className="sm-toggle"
@@ -844,23 +859,13 @@ What would you like to know?`,
           onClick={toggleMenu}
           type="button"
         >
-          <span ref={textWrapRef} className="sm-toggle-textWrap" aria-hidden="true">
-            <span ref={textInnerRef} className="sm-toggle-textInner">
-              {textLines.map((l, i) => (
-                <span className="sm-toggle-line" key={i}>
-                  {l}
-                </span>
-              ))}
-            </span>
-          </span>
-          <span ref={iconRef} className="sm-icon" aria-hidden="true">
-            <span ref={plusHRef} className="sm-icon-line" />
-            <span ref={plusVRef} className="sm-icon-line sm-icon-line-v" />
-          </span>
+          {(open ? 'CLOSE' : 'CHAT').split('').map((letter, i) => (
+            <span key={i} style={{ display: 'block' }}>{letter}</span>
+          ))}
         </button>
       </header>
 
-      <aside id="staggered-menu-panel" ref={panelRef} className="staggered-menu-panel" aria-hidden={!open}>
+      <aside id="staggered-menu-panel" ref={panelRef} className="staggered-menu-panel">
         <div className="sm-panel-inner">
           {/* AI Chat box replaces the link list. Socials below are preserved. */}
           <div className="sm-chat" role="region" aria-label="AI assistant chat" style={{ position: 'relative' }}>
@@ -970,6 +975,16 @@ What would you like to know?`,
                     </a>
                   </li>
                 ))}
+                {/* Close button as 4th item */}
+                <li className="sm-socials-item">
+                  <button 
+                    onClick={toggleMenu} 
+                    className="sm-socials-link sm-close-button"
+                    aria-label="Close menu"
+                  >
+                    Close Menu
+                  </button>
+                </li>
               </ul>
             </div>
           )}

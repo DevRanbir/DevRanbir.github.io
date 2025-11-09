@@ -23,14 +23,15 @@
 }
 
 .staggered-menu-header {
-  position: absolute;
-  bottom: 0;
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
   right: 0;
   width: auto;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 1rem;
+  gap: 0;
   padding: 0;
   background: transparent;
   pointer-events: none;
@@ -52,18 +53,20 @@
 .sm-toggle {
   position: relative;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  background: rgba(0, 0, 0, 0);
+  justify-content: center;
+  gap: 0.2rem;
+  background: rgba(0, 0, 0, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.611);
   cursor: pointer;
   color: #e9e9ef;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1;
   overflow: visible;
-  padding: 12px 16px;
-  border-radius: 12px;
+  padding: 16px 12px;
+  border-radius: 12px 0 0 12px;
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
 }
@@ -76,6 +79,34 @@
   outline: 2px solid #8400ff;
   outline-offset: 4px;
   border-radius: 12px;
+}
+
+/* Hide toggle button when menu is open */
+.staggered-menu-wrapper[data-open] .sm-toggle {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+/* Hide prelayers when menu is closed */
+.staggered-menu-wrapper:not([data-open]) .sm-prelayers {
+  visibility: hidden;
+}
+
+/* Show prelayers when menu is open */
+.staggered-menu-wrapper[data-open] .sm-prelayers {
+  visibility: visible;
+}
+
+/* Hide panel when menu is closed */
+.staggered-menu-wrapper:not([data-open]) .staggered-menu-panel {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Prevent focus on buttons when panel is hidden */
+.staggered-menu-wrapper:not([data-open]) .staggered-menu-panel button {
+  pointer-events: none;
 }
 
 .sm-toggle-textWrap {
@@ -105,7 +136,7 @@
   width: 14px;
   height: 14px;
   flex: 0 0 14px;
-  display: inline-flex;
+  display: none;
   align-items: center;
   justify-content: center;
   will-change: transform;
@@ -131,7 +162,7 @@
 
 .staggered-menu-panel {
   position: fixed;
-  top: 0;
+  bottom: 0;
   right: 0;
   width: clamp(260px, 38vw, 420px);
   height: 100vh;
@@ -161,6 +192,7 @@
   width: clamp(260px, 38vw, 420px);
   pointer-events: none;
   z-index: 5;
+  opacity: 0;
 }
 
 [data-position='left'] .sm-prelayers {
@@ -327,20 +359,36 @@
 
 /* Mobile styles */
 @media (max-width: 1024px) {
-  .staggered-menu-wrapper {
-    bottom: 50%;
+  .staggered-menu-header {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
     right: 0;
-    transform: translateY(50%);
+    z-index: 30;
+  }
+
+  .staggered-menu-wrapper[data-open] .staggered-menu-panel {
+    visibility: visible !important;
+    pointer-events: auto !important;
+    z-index: 20 !important;
+    transform: translate(0, 0) !important;
+    left: 0 !important;
+    right: 0 !important;
   }
 
   .staggered-menu-panel {
-    width: 100%;
+    width: 100vw;
+    height: 100vh;
     left: 0;
     right: 0;
+    bottom: 0;
+    top: 0;
   }
 
   .sm-prelayers {
-    width: 100%;
+    width: 100vw;
+    left: 0;
+    right: 0;
   }
 
   .sm-toggle {
@@ -349,21 +397,38 @@
 }
 
 @media (max-width: 640px) {
-  .staggered-menu-wrapper {
-    bottom: 50%;
+  .staggered-menu-header {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
     right: 0;
-    transform: translateY(50%);
+    z-index: 30;
+  }
+
+  .staggered-menu-wrapper[data-open] .staggered-menu-panel {
+    visibility: visible !important;
+    pointer-events: auto !important;
+    z-index: 20 !important;
+    display: flex !important;
+    transform: translate(0, 0) !important;
+    left: 0 !important;
+    right: 0 !important;
   }
 
   .staggered-menu-panel {
-    width: 100%;
+    width: 100vw;
+    height: 100vh;
     left: 0;
     right: 0;
+    bottom: 0;
+    top: 0;
     padding: 3em 1.5em 1.5em 1.5em;
   }
 
   .sm-prelayers {
-    width: 100%;
+    width: 100vw;
+    left: 0;
+    right: 0;
   }
 
   .sm-panel-item {
