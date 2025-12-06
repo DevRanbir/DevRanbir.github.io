@@ -1,0 +1,6 @@
+name = "devranbir"
+compatibility_date = "2025-12-06"
+account_id = "1b3f463c68855becb3d10e49af225dc5"
+
+# Tell Wrangler Pages the build output directory
+pages_build_output_dir = "./build"
